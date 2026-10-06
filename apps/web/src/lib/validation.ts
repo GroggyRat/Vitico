@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { parseBusinessTime } from "./time";
 
 const trimmed = () => z.string().trim();
 const optionalText = () =>
@@ -22,10 +23,15 @@ export const passwordSchema = z
   .regex(/[a-zA-Z]/, { error: "Include at least one letter." })
   .regex(/[0-9]/, { error: "Include at least one number." });
 
-export const moneySchema = z.coerce
-  .number({ error: "Enter an amount." })
-  .min(0, { error: "Must be 0 or more." })
-  .max(99_999_999.99)
+export const moneySchema = z
+  .preprocess(
+    // Blank inputs mean "not entered", not zero.
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.coerce
+      .number({ error: "Enter an amount." })
+      .min(0, { error: "Must be 0 or more." })
+      .max(99_999_999.99),
+  )
   .transform((v) => Math.round(v * 100) / 100);
 
 const optionalMoney = z
@@ -128,3 +134,175 @@ export const addressSchema = z.object({
   regionId: trimmed().min(1, { error: "Choose a region." }),
 });
 export type AddressInput = z.infer<typeof addressSchema>;
+
+// ─── Catalogue ───────────────────────────────────────────────────────────────
+
+const intField = (min: number, label: string) =>
+  z.coerce.number({ error: `Enter ${label}.` }).int({ error: `${label} must be a whole number.` }).min(min, { error: `${label} must be at least ${min}.` });
+
+const checkbox = z.preprocess((v) => v === "on" || v === "true" || v === true || v === "1" || v === "yes", z.boolean());
+
+export const vatCategorySchema = z.enum(["STANDARD", "ZERO_RATED", "EXEMPT"]);
+
+export const productSchema = z
+  .object({
+    sku: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .min(2, { error: "Enter a SKU." })
+      .max(40)
+      .regex(/^[A-Z0-9._-]+$/, { error: "Use letters, numbers, dots, dashes or underscores." }),
+    barcode: optionalText(),
+    name: trimmed().min(2, { error: "Enter a product name." }).max(200),
+    brand: optionalText(),
+    description: optionalText(),
+    categoryId: trimmed().min(1, { error: "Choose a category." }),
+    sellUnit: trimmed().min(1, { error: "Describe the sell unit, e.g. Carton." }).max(100),
+    unitsPerCarton: intField(1, "units per carton"),
+    moq: intField(1, "minimum order"),
+    orderMultiple: intField(1, "order multiple"),
+    cartonCbm: z.coerce.number().min(0).max(100).transform((v) => Math.round(v * 10_000) / 10_000),
+    cartonWeightKg: z.coerce.number().min(0).max(100_000).transform((v) => Math.round(v * 1000) / 1000),
+    basePrice: moneySchema,
+    costPrice: optionalMoney,
+    vatCategory: vatCategorySchema,
+    imageUrl: z
+      .union([z.literal(""), z.url({ protocol: /^https?$/, error: "Enter a full http(s) image URL." })])
+      .optional()
+      .transform((v) => v || null),
+    tags: z
+      .string()
+      .optional()
+      .transform((v) =>
+        (v ?? "")
+          .split(",")
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    lowStockThreshold: intField(0, "low-stock threshold"),
+    active: checkbox,
+  })
+  .refine((p) => p.moq % p.orderMultiple === 0, {
+    error: "Minimum order must be a multiple of the order multiple.",
+    path: ["moq"],
+  });
+export type ProductInput = z.infer<typeof productSchema>;
+
+export const categorySchema = z.object({
+  name: trimmed().min(2, { error: "Enter a name." }).max(100),
+  parentId: optionalText(),
+  sortOrder: z.coerce.number().int().min(0).max(10_000).default(0),
+  active: checkbox,
+});
+export type CategoryInput = z.infer<typeof categorySchema>;
+
+export const stockAdjustSchema = z.object({
+  type: z.enum(["RECEIPT", "ADJUSTMENT"]),
+  qty: z.coerce
+    .number({ error: "Enter a quantity." })
+    .int({ error: "Use whole sell units." })
+    .refine((n) => n !== 0, { error: "Quantity can't be zero." }),
+  reason: trimmed().min(3, { error: "Say why (e.g. container MSKU1234 received, stocktake)." }).max(500),
+});
+
+// ─── Pricing ─────────────────────────────────────────────────────────────────
+
+/** Optional date/datetime form value, interpreted as Fiji local time. */
+const optionalDate = (opts: { endOfDay?: boolean } = {}) =>
+  z
+    .string()
+    .trim()
+    .optional()
+    .transform((v, ctx) => {
+      if (!v) return null;
+      const d = parseBusinessTime(v, opts);
+      if (!d) {
+        ctx.addIssue({ code: "custom", message: "Enter a valid date." });
+        return z.NEVER;
+      }
+      return d;
+    });
+
+const adjustmentKind = z.enum(["PERCENT_OFF", "FIXED_PRICE"]);
+
+const percentMax = { error: "A percentage can't exceed 100.", path: ["value"] };
+const percentOk = (a: { kind: string; value: number }) => a.kind !== "PERCENT_OFF" || a.value <= 100;
+
+export const pricingConfigSchema = z
+  .object({
+    priority1: z.enum(["CONTRACT", "PROMOTION", "TIER", "QTY_BREAK"]),
+    priority2: z.enum(["CONTRACT", "PROMOTION", "TIER", "QTY_BREAK"]),
+    priority3: z.enum(["CONTRACT", "PROMOTION", "TIER", "QTY_BREAK"]),
+    priority4: z.enum(["CONTRACT", "PROMOTION", "TIER", "QTY_BREAK"]),
+    stackTierAndQtyBreak: checkbox,
+    minMarginPercent: z.coerce.number().min(0).max(100),
+  })
+  .refine((v) => new Set([v.priority1, v.priority2, v.priority3, v.priority4]).size === 4, {
+    error: "Each pricing source must appear exactly once.",
+    path: ["priority1"],
+  });
+
+export const contractPriceSchema = z
+  .object({
+    companyId: trimmed().min(1, { error: "Choose a customer." }),
+    sku: trimmed().toUpperCase().min(1, { error: "Enter a SKU." }),
+    price: moneySchema,
+    regionId: optionalText(),
+    minQty: z.coerce.number().int().min(1).default(1),
+    validFrom: optionalDate(),
+    validTo: optionalDate({ endOfDay: true }),
+    note: optionalText(),
+  })
+  .refine((c) => !c.validFrom || !c.validTo || c.validFrom <= c.validTo, { error: "End must be after start.", path: ["validTo"] });
+export type ContractPriceInput = z.infer<typeof contractPriceSchema>;
+
+export const quantityBreakSchema = z
+  .object({
+    kind: adjustmentKind,
+    value: moneySchema,
+    minQty: z.coerce.number().int().min(2, { error: "Breaks start at 2 units." }),
+  })
+  .refine(percentOk, percentMax);
+
+export const tierPriceSchema = z.object({ tierId: trimmed().min(1), price: optionalMoney });
+
+export const promotionSchema = z
+  .object({
+  kind: adjustmentKind,
+  value: moneySchema,
+  name: trimmed().min(2, { error: "Name the promotion." }).max(100),
+  description: optionalText(),
+  minQty: z.coerce.number().int().min(1).default(1),
+  startsAt: optionalDate(),
+  endsAt: optionalDate({ endOfDay: true }),
+  active: checkbox,
+  skus: z
+    .string()
+    .optional()
+    .transform((v) =>
+      [...new Set((v ?? "").split(/[\s,]+/).map((s) => s.trim().toUpperCase()).filter(Boolean))],
+    )
+    .refine((a) => a.length > 0, { error: "Add at least one SKU." }),
+  tierIds: z.array(z.string()).default([]),
+  regionIds: z.array(z.string()).default([]),
+  })
+  .refine(percentOk, percentMax)
+  .refine((p) => !p.startsAt || !p.endsAt || p.startsAt <= p.endsAt, { error: "End must be after start.", path: ["endsAt"] });
+export type PromotionInput = z.infer<typeof promotionSchema>;
+
+export const fcccSchema = z.object({
+  price: moneySchema.refine((v) => v > 0, { error: "Enter the controlled price." }),
+  basis: z.enum(["PER_ITEM", "PER_SELL_UNIT"]),
+  vatInclusive: checkbox,
+  regionId: optionalText(),
+  effectiveFrom: optionalDate().refine((d) => d !== null, { error: "Enter the effective date." }),
+  expiresAt: optionalDate({ endOfDay: true }),
+  reference: optionalText(),
+});
+export type FcccInput = z.infer<typeof fcccSchema>;
+
+export const exchangeRateSchema = z.object({
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, { error: "Use a 3-letter currency code." }),
+  perFjd: z.coerce.number().positive({ error: "Enter a positive rate." }),
+});

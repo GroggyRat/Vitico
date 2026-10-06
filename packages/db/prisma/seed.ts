@@ -5,6 +5,7 @@
  * All seeded users share the password in SEED_PASSWORD (default below).
  */
 import { hash } from "@node-rs/argon2";
+import { seedCategories, seedProducts } from "./seed-catalogue";
 import {
   CompanyRole,
   CompanyStatus,
@@ -228,6 +229,106 @@ async function main() {
         },
       },
     });
+  }
+
+  // Catalogue (parents first; seedCategories is ordered that way).
+  for (const [i, c] of seedCategories.entries()) {
+    const parentId = c.parent ? (await db.category.findUniqueOrThrow({ where: { slug: c.parent } })).id : null;
+    await db.category.upsert({
+      where: { slug: c.slug },
+      update: {},
+      create: { slug: c.slug, name: c.name, parentId, sortOrder: i },
+    });
+  }
+  let newProducts = 0;
+  for (const p of seedProducts) {
+    if (await db.product.findUnique({ where: { sku: p.sku } })) continue;
+    const category = await db.category.findUniqueOrThrow({ where: { slug: p.category } });
+    await db.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          sku: p.sku,
+          name: p.name,
+          brand: p.brand,
+          categoryId: category.id,
+          sellUnit: p.sellUnit,
+          unitsPerCarton: p.units,
+          moq: p.moq ?? 1,
+          orderMultiple: p.multiple ?? 1,
+          cartonCbm: p.cbm,
+          cartonWeightKg: p.kg,
+          basePrice: p.price,
+          costPrice: p.cost,
+          vatCategory: p.vat ?? "STANDARD",
+          tags: p.tags ?? [],
+          stock: { create: { onHand: p.stock } },
+        },
+      });
+      if (p.stock > 0) {
+        await tx.stockMovement.create({
+          data: {
+            productId: product.id,
+            type: "RECEIPT",
+            onHandDelta: p.stock,
+            onHandAfter: p.stock,
+            reservedAfter: 0,
+            allocatedAfter: 0,
+            reason: "Opening stock (seed)",
+            actorId: admin.id,
+          },
+        });
+      }
+    });
+    newProducts++;
+  }
+  console.log(`Seeded ${seedCategories.length} categories, ${newProducts} new products.`);
+
+  // Pricing examples. Only seeded once (when the catalogue is first created).
+  if (newProducts > 0) {
+    const bySku = async (sku: string) => (await db.product.findUniqueOrThrow({ where: { sku } })).id;
+    for (const [sku, breaks] of [
+      ["RIC-JAS-25", [[20, 3], [50, 5], [100, 7]]],
+      ["NDL-CHK-40", [[50, 4], [200, 8]]],
+      ["NDL-CUR-40", [[50, 4], [200, 8]]],
+      ["OIL-VEG-4X5", [[25, 3], [60, 6]]],
+      ["SUG-BRN-25", [[40, 4]]],
+    ] as [string, [number, number][]][]) {
+      const productId = await bySku(sku);
+      for (const [minQty, pct] of breaks) {
+        await db.quantityBreak.create({ data: { productId, minQty, kind: "PERCENT_OFF", value: pct } });
+      }
+    }
+    const bulaMart = await db.company.findFirst({ where: { name: "Bula Mart Supermarket Ltd" } });
+    if (bulaMart) {
+      await db.contractPrice.create({
+        data: { companyId: bulaMart.id, productId: await bySku("CBF-340-24"), price: 104.5, note: "2026 supply agreement", createdById: admin.id },
+      });
+    }
+    const vip = await db.tier.findUniqueOrThrow({ where: { code: "VIP" } });
+    await db.tierPrice.create({ data: { tierId: vip.id, productId: await bySku("MLK-PWD-12"), price: 185 } });
+    const promo = await db.promotion.create({
+      data: { name: "Fiji Day special", kind: "PERCENT_OFF", value: 10, endsAt: new Date(Date.now() + 30 * 86_400_000) },
+    });
+    for (const sku of ["BIS-CRM-24", "BIS-SWT-24", "CHP-CAS-30"]) {
+      await db.promotionProduct.create({ data: { promotionId: promo.id, productId: await bySku(sku) } });
+    }
+    // Indicative FCCC controlled prices (per retail item, VAT inclusive). Placeholders, not real gazette values.
+    for (const [sku, price, basis] of [
+      ["FLR-PLN-25", 52.0, "PER_SELL_UNIT"],
+      ["SUG-BRN-25", 55.0, "PER_SELL_UNIT"],
+      ["TUN-OIL-48", 2.65, "PER_ITEM"],
+      ["CBF-340-24", 6.2, "PER_ITEM"],
+      ["MLK-PWD-12", 21.5, "PER_ITEM"],
+      ["RIC-LG-10X2", 6.1, "PER_ITEM"],
+    ] as [string, number, "PER_ITEM" | "PER_SELL_UNIT"][]) {
+      await db.fcccPrice.create({
+        data: { productId: await bySku(sku), price, basis, vatInclusive: true, effectiveFrom: new Date("2026-01-01"), reference: "FCCC price order (sample)" },
+      });
+    }
+  }
+  // Indicative exchange rates (units per 1 FJD). Placeholders until refreshed from the rate service.
+  for (const [currency, perFjd] of [["WST", 1.2], ["TOP", 1.04], ["VUV", 52.9], ["SBD", 3.72], ["AUD", 0.68], ["NZD", 0.75]] as const) {
+    await db.exchangeRate.upsert({ where: { currency }, update: {}, create: { currency, perFjd, source: "seed" } });
   }
 
   console.log(`Seeded ${regions.length} regions, ${tiers.length} tiers, ${staff.length} staff, ${companies.length} companies.`);

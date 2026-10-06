@@ -1,18 +1,5 @@
-import { type Page, expect, test } from "@playwright/test";
-
-const SEED_PASSWORD = "Vitico!2026";
-
-async function login(page: Page, email: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-}
-
-async function logout(page: Page) {
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login/);
-}
+import { expect, test } from "@playwright/test";
+import { SEED_PASSWORD, login, logout } from "./helpers";
 
 test("a new customer applies, is approved, and onboards a buyer", async ({ page }) => {
   // 1. Apply.
@@ -31,7 +18,10 @@ test("a new customer applies, is approved, and onboards a buyer", async ({ page 
   await expect(page.getByRole("heading", { name: /application received/i })).toBeVisible();
 
   // Can't sign in until approved.
-  await login(page, "kalesi@savusavu.test", "savusavu-2026");
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("kalesi@savusavu.test");
+  await page.getByLabel("Password").fill("savusavu-2026");
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText(/still being reviewed/)).toBeVisible();
 
   // 2. Admin approves with VIP tier and credit.
