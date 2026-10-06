@@ -15,7 +15,7 @@ import type { CustomerActor, StaffActor } from "../actors";
 import { ServiceError } from "../errors";
 import { companyScope } from "../services/companies";
 import { moveStock } from "../services/stock";
-import { type CartOwner, clearCart, getOrCreateCart, priceCart } from "./cart";
+import { type CartOwner, type PricedLine, clearCart, getOrCreateCart, priceCart } from "./cart";
 import { companyUserIds, notify, ownersOf, staffForCompany, staffWith } from "../notifications/notify";
 import { enqueueOdoo } from "../odoo/sync";
 import { onOrderCompleted, onOrderPaid, redeemRebate, refundOrderRebate } from "../rebates/service";
@@ -171,8 +171,26 @@ export type Placer =
  * Turns the cart into an order. Prices are recalculated here, stock is reserved
  * (locked per product), credit is checked, and approval steps are decided.
  */
-export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, paymentMethod: PaymentMethod, opts: { rebateCents?: number } = {}) {
-  const rebateCents = Math.max(0, Math.round(opts.rebateCents ?? 0));
+/** Everything needed to turn priced items into an order: a cart or a container build. */
+export type OrderSource = {
+  company: { id: string; status: string };
+  regionId: string;
+  isExport: boolean;
+  lines: PricedLine[];
+  subtotalCents: number;
+  vatTotalCents: number;
+  totalCents: number;
+  hasOverrides: boolean;
+  delivery: {
+    pickup: boolean;
+    address: { label: string; line1: string; line2: string | null; city: string } | null;
+    poNumber: string | null;
+    notes: string | null;
+    requestedDate: Date | null;
+  };
+};
+
+export function assertCanPlace(placer: Placer, paymentMethod: PaymentMethod) {
   if (placer.kind === "customer" && !companyCan(placer.actor.companyRole, "orders.place")) {
     throw new ServiceError("Your role can't place orders.");
   }
@@ -180,130 +198,172 @@ export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, payme
     throw new ServiceError("You can't place orders for customers.");
   }
   if (!CUSTOMER_PAYMENT_METHODS.includes(paymentMethod)) throw new ServiceError("Choose a payment method.", "paymentMethod");
+}
 
+export async function assertStaffScope(tx: Tx, placer: Placer, companyId: string) {
+  if (placer.kind !== "staff") return;
+  const visible = await tx.company.findFirst({ where: { id: companyId, ...companyScope(placer.actor) } });
+  if (!visible) throw new ServiceError("You can only order for your own customers.");
+}
+
+/**
+ * Creates an order from priced items inside the caller's transaction: validates lines,
+ * credit and rebate use, decides approvals, reserves stock (deadlock-safe ordering),
+ * spends rebates and sends notifications.
+ */
+export async function createOrderFromPriced(
+  tx: Tx,
+  source: OrderSource,
+  placer: Placer,
+  paymentMethod: PaymentMethod,
+  opts: { rebateCents?: number; extra?: Omit<Prisma.OrderUncheckedCreateInput, "companyId" | "placedById" | "status" | "regionId" | "subtotal" | "vatTotal" | "total" | "paymentMethod"> } = {},
+) {
+  const rebateCents = Math.max(0, Math.round(opts.rebateCents ?? 0));
+  const { company, delivery } = source;
+  if (source.lines.length === 0) throw new ServiceError("There's nothing to order.");
+  if (company.status !== "ACTIVE") throw new ServiceError("This account isn't active.");
+  const blocking = source.lines.find((l) => l.problems.some((p) => !p.startsWith("Only") && p !== "Out of stock."));
+  if (blocking) throw new ServiceError(`${blocking.product.name}: ${blocking.problems[0]}`);
+  if (!delivery.pickup && !delivery.address) throw new ServiceError("Choose a delivery address or pickup.");
+  if (source.hasOverrides && placer.kind !== "staff") throw new ServiceError("Manual prices can only be set by VITICO staff.");
+
+  if (rebateCents > source.totalCents) throw new ServiceError("You can't use more rebate than the order total.", "rebate");
+  const dueCents = source.totalCents - rebateCents;
+  const fullyCovered = rebateCents > 0 && dueCents === 0;
+  if (paymentMethod === PaymentMethod.ON_ACCOUNT && !fullyCovered) {
+    const credit = await creditAvailable(tx, company.id);
+    if (credit.limitCents <= 0) throw new ServiceError("This account doesn't have credit terms. Choose another payment method.", "paymentMethod");
+    if (dueCents > credit.availableCents) {
+      throw new ServiceError(
+        `This order (${fromCents(dueCents).toFixed(2)}) is more than your available credit (${fromCents(Math.max(0, credit.availableCents)).toFixed(2)}).`,
+        "paymentMethod",
+      );
+    }
+  }
+
+  const needsCustomerApproval =
+    placer.kind === "customer" &&
+    placer.actor.companyRole === CompanyRole.PURCHASING &&
+    placer.orderLimitCents !== null &&
+    source.totalCents > placer.orderLimitCents;
+  const status: OrderStatus = needsCustomerApproval ? S.PENDING_CUSTOMER_APPROVAL : source.hasOverrides ? S.PENDING_PRICE_APPROVAL : S.SUBMITTED;
+  const actorId = placer.actor.id;
+
+  const order = await tx.order.create({
+    data: {
+      ...opts.extra,
+      status,
+      companyId: company.id,
+      placedById: actorId,
+      onBehalf: placer.kind === "staff",
+      pickup: delivery.pickup,
+      regionId: source.regionId,
+      deliveryLabel: delivery.address?.label ?? null,
+      deliveryLine1: delivery.address?.line1 ?? null,
+      deliveryLine2: delivery.address?.line2 ?? null,
+      deliveryCity: delivery.address?.city ?? null,
+      poNumber: delivery.poNumber,
+      notes: delivery.notes,
+      requestedDate: delivery.requestedDate,
+      isExport: source.isExport,
+      subtotal: fromCents(source.subtotalCents),
+      vatTotal: fromCents(source.vatTotalCents),
+      total: fromCents(source.totalCents),
+      paymentMethod: fullyCovered ? PaymentMethod.REBATE_WALLET : paymentMethod,
+      paymentStatus: fullyCovered ? PaymentStatus.PAID : paymentMethod === PaymentMethod.ON_ACCOUNT ? PaymentStatus.ON_ACCOUNT : PaymentStatus.UNPAID,
+      rebateApplied: fromCents(rebateCents),
+      paidAt: fullyCovered ? new Date() : null,
+      submittedAt: status === S.SUBMITTED ? new Date() : null,
+      lines: {
+        create: source.lines.map((l) => ({
+          productId: l.product.id,
+          sku: l.product.sku,
+          name: l.product.name,
+          sellUnit: l.product.sellUnit,
+          qty: l.qty,
+          unitPrice: fromCents(l.unitCents),
+          calculatedUnitPrice: fromCents(l.calculatedCents),
+          baseUnitPrice: l.product.basePrice,
+          priceSource: l.priceSource,
+          priceLabel: l.priceLabel,
+          overrideReason: l.override?.reason ?? null,
+          vatPercent: l.vatPercent,
+          lineNet: fromCents(l.netCents),
+          lineVat: fromCents(l.vatCents),
+          cartonCbm: l.product.cartonCbm,
+          cartonWeightKg: l.product.cartonWeightKg,
+        })),
+      },
+    },
+  });
+
+  // Reserve in a fixed order to avoid deadlocks between concurrent checkouts.
+  for (const l of [...source.lines].sort((a, b) => a.product.id.localeCompare(b.product.id))) {
+    try {
+      await moveStock(tx, { productId: l.product.id, type: StockMovementType.RESERVE, qty: l.qty, refType: "Order", refId: order.id, actorId });
+    } catch (e) {
+      if (e instanceof ServiceError) throw new ServiceError(`${l.product.name}: ${e.message}`);
+      throw e;
+    }
+  }
+
+  if (rebateCents > 0) {
+    await redeemRebate(tx, company.id, rebateCents, { orderId: order.id, description: `Used on order ${order.number}`, actorId });
+  }
+  await event(tx, order.id, {
+    type: "placed",
+    to: status,
+    note: placer.kind === "staff" ? "Placed by VITICO on the customer's behalf" : null,
+    actorId,
+  });
+
+  const link = `/portal/orders/${order.id}`;
+  if (status === S.PENDING_CUSTOMER_APPROVAL) {
+    const placerUser = await tx.user.findUniqueOrThrow({ where: { id: actorId }, select: { name: true } });
+    await notify(tx, {
+      type: "order.needs_approval",
+      userIds: await ownersOf(tx, company.id),
+      vars: { order: order.number, total: money(order.total), placedBy: placerUser.name },
+      link,
+    });
+  } else {
+    await notify(tx, { type: "order.placed", userIds: await customerRecipients(tx, order), vars: { order: order.number, total: money(order.total) }, link });
+  }
+  if (status === S.PENDING_PRICE_APPROVAL) await notifyPriceApproval(tx, order);
+  if (status === S.SUBMITTED) await notifyStaffNewOrder(tx, order);
+  return order;
+}
+
+/** Turns the cart into an order (see createOrderFromPriced). */
+export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, paymentMethod: PaymentMethod, opts: { rebateCents?: number } = {}) {
+  assertCanPlace(placer, paymentMethod);
   return db.$transaction(
     async (tx) => {
-      if (placer.kind === "staff") {
-        const visible = await tx.company.findFirst({ where: { id: owner.companyId, ...companyScope(placer.actor) } });
-        if (!visible) throw new ServiceError("You can only order for your own customers.");
-      }
+      await assertStaffScope(tx, placer, owner.companyId);
       // Serialise checkouts of the same cart (double-click protection).
       const cartRow = await tx.cart.findUnique({ where: { userId_companyId: { userId: owner.userId, companyId: owner.companyId } } });
       if (cartRow) await tx.$queryRaw`SELECT id FROM "Cart" WHERE id = ${cartRow.id} FOR UPDATE`;
 
       const priced = await priceCart(tx, owner);
-      const { cart, company } = priced;
       if (priced.lines.length === 0) throw new ServiceError("Your cart is empty.");
-      if (company.status !== "ACTIVE") throw new ServiceError("This account isn't active.");
-      const blocking = priced.lines.find((l) => l.problems.some((p) => !p.startsWith("Only") && p !== "Out of stock."));
-      if (blocking) throw new ServiceError(`${blocking.product.name}: ${blocking.problems[0]}`);
-      if (!cart.pickup && !cart.address) throw new ServiceError("Choose a delivery address or pickup.");
-      if (priced.hasOverrides && placer.kind !== "staff") throw new ServiceError("Manual prices can only be set by VITICO staff.");
-
-      if (rebateCents > priced.totalCents) throw new ServiceError("You can't use more rebate than the order total.", "rebate");
-      const dueCents = priced.totalCents - rebateCents;
-      const fullyCovered = rebateCents > 0 && dueCents === 0;
-      if (paymentMethod === PaymentMethod.ON_ACCOUNT && !fullyCovered) {
-        const credit = await creditAvailable(tx, company.id);
-        if (credit.limitCents <= 0) throw new ServiceError("This account doesn't have credit terms. Choose another payment method.", "paymentMethod");
-        if (dueCents > credit.availableCents) {
-          throw new ServiceError(
-            `This order (${fromCents(dueCents).toFixed(2)}) is more than your available credit (${fromCents(Math.max(0, credit.availableCents)).toFixed(2)}).`,
-            "paymentMethod",
-          );
-        }
-      }
-
-      const needsCustomerApproval =
-        placer.kind === "customer" &&
-        placer.actor.companyRole === CompanyRole.PURCHASING &&
-        placer.orderLimitCents !== null &&
-        priced.totalCents > placer.orderLimitCents;
-      const status: OrderStatus = needsCustomerApproval ? S.PENDING_CUSTOMER_APPROVAL : priced.hasOverrides ? S.PENDING_PRICE_APPROVAL : S.SUBMITTED;
-      const actorId = placer.actor.id;
-
-      const order = await tx.order.create({
-        data: {
-          status,
-          companyId: company.id,
-          placedById: actorId,
-          onBehalf: placer.kind === "staff",
-          pickup: cart.pickup,
-          regionId: priced.regionId,
-          deliveryLabel: cart.pickup ? null : cart.address!.label,
-          deliveryLine1: cart.pickup ? null : cart.address!.line1,
-          deliveryLine2: cart.pickup ? null : cart.address!.line2,
-          deliveryCity: cart.pickup ? null : cart.address!.city,
-          poNumber: cart.poNumber,
-          notes: cart.notes,
-          requestedDate: cart.requestedDate,
-          isExport: priced.isExport,
-          subtotal: fromCents(priced.subtotalCents),
-          vatTotal: fromCents(priced.vatTotalCents),
-          total: fromCents(priced.totalCents),
-          paymentMethod: fullyCovered ? PaymentMethod.REBATE_WALLET : paymentMethod,
-          paymentStatus: fullyCovered ? PaymentStatus.PAID : paymentMethod === PaymentMethod.ON_ACCOUNT ? PaymentStatus.ON_ACCOUNT : PaymentStatus.UNPAID,
-          rebateApplied: fromCents(rebateCents),
-          paidAt: fullyCovered ? new Date() : null,
-          submittedAt: status === S.SUBMITTED ? new Date() : null,
-          lines: {
-            create: priced.lines.map((l) => ({
-              productId: l.product.id,
-              sku: l.product.sku,
-              name: l.product.name,
-              sellUnit: l.product.sellUnit,
-              qty: l.qty,
-              unitPrice: fromCents(l.unitCents),
-              calculatedUnitPrice: fromCents(l.calculatedCents),
-              baseUnitPrice: l.product.basePrice,
-              priceSource: l.priceSource,
-              priceLabel: l.priceLabel,
-              overrideReason: l.override?.reason ?? null,
-              vatPercent: l.vatPercent,
-              lineNet: fromCents(l.netCents),
-              lineVat: fromCents(l.vatCents),
-              cartonCbm: l.product.cartonCbm,
-              cartonWeightKg: l.product.cartonWeightKg,
-            })),
+      const { cart } = priced;
+      const order = await createOrderFromPriced(
+        tx,
+        {
+          ...priced,
+          delivery: {
+            pickup: cart.pickup,
+            address: cart.pickup ? null : cart.address,
+            poNumber: cart.poNumber,
+            notes: cart.notes,
+            requestedDate: cart.requestedDate,
           },
         },
-      });
-
-      // Reserve in a fixed order to avoid deadlocks between concurrent checkouts.
-      for (const l of [...priced.lines].sort((a, b) => a.product.id.localeCompare(b.product.id))) {
-        try {
-          await moveStock(tx, { productId: l.product.id, type: StockMovementType.RESERVE, qty: l.qty, refType: "Order", refId: order.id, actorId });
-        } catch (e) {
-          if (e instanceof ServiceError) throw new ServiceError(`${l.product.name}: ${e.message}`);
-          throw e;
-        }
-      }
-
-      if (rebateCents > 0) {
-        await redeemRebate(tx, company.id, rebateCents, { orderId: order.id, description: `Used on order ${order.number}`, actorId });
-      }
-      await event(tx, order.id, {
-        type: "placed",
-        to: status,
-        note: placer.kind === "staff" ? "Placed by VITICO on the customer's behalf" : null,
-        actorId,
-      });
+        placer,
+        paymentMethod,
+        { rebateCents: opts.rebateCents },
+      );
       await clearCart(tx, cart.id);
-
-      const link = `/portal/orders/${order.id}`;
-      if (status === S.PENDING_CUSTOMER_APPROVAL) {
-        const placer = await tx.user.findUniqueOrThrow({ where: { id: actorId }, select: { name: true } });
-        await notify(tx, {
-          type: "order.needs_approval",
-          userIds: await ownersOf(tx, company.id),
-          vars: { order: order.number, total: money(order.total), placedBy: placer.name },
-          link,
-        });
-      } else {
-        await notify(tx, { type: "order.placed", userIds: await customerRecipients(tx, order), vars: { order: order.number, total: money(order.total) }, link });
-      }
-      if (status === S.PENDING_PRICE_APPROVAL) await notifyPriceApproval(tx, order);
-      if (status === S.SUBMITTED) await notifyStaffNewOrder(tx, order);
       return order;
     },
     { timeout: 30_000 },

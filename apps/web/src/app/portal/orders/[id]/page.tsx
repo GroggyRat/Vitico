@@ -30,6 +30,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/po
     include: {
       lines: true,
       region: true,
+      containerType: true,
       placedBy: { select: { name: true } },
       events: { orderBy: { createdAt: "asc" }, include: { actor: { select: { name: true } } } },
       payments: { orderBy: { createdAt: "asc" } },
@@ -139,6 +140,15 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/po
             <CardHeader title="Details" />
             <CardBody>
               <dl className="space-y-2 text-sm">
+                {order.containerType && (
+                  <div>
+                    <dt className="text-ink-muted">Container</dt>
+                    <dd>
+                      {order.containerType.name} · {Number(order.containerCbm).toFixed(2)} m³ ({Math.round((Number(order.containerCbm) / Number(order.containerType.maxCbm)) * 100)}%) ·{" "}
+                      {Math.round(Number(order.containerWeightKg)).toLocaleString()} kg
+                    </dd>
+                  </div>
+                )}
                 <div>
                   <dt className="text-ink-muted">{order.pickup ? "Pickup" : "Deliver to"}</dt>
                   <dd>

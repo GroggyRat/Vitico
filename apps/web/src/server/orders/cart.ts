@@ -124,16 +124,23 @@ export type PricedLine = {
   problems: string[];
 };
 
-/** The cart with every line priced for its delivery region, totals and any blocking problems. */
-export async function priceCart(db: Tx, owner: CartOwner) {
-  const cart = await getOrCreateCart(db, owner);
-  const full = await db.cart.findUniqueOrThrow({ where: { id: cart.id }, include: cartInclude });
-  const company = await db.company.findUniqueOrThrow({ where: { id: owner.companyId } });
-  const regionId = !full.pickup && full.address ? full.address.regionId : company.regionId;
-  const pricer = await createPricer(db, { companyId: owner.companyId, regionId });
-  const prices = await pricer.forProducts(full.items.map((i) => i.product));
+type PricingItem = {
+  id: string;
+  product: Prisma.ProductGetPayload<{ include: { stock: true; category: true } }>;
+  qty: number;
+  overridePrice: Prisma.Decimal | null;
+  overrideReason: string | null;
+};
 
-  const lines: PricedLine[] = full.items.map((item) => {
+/**
+ * Prices a set of items (cart lines or container lines) for a customer and delivery region,
+ * with totals, volume/weight and blocking problems. Shared by carts and container builds.
+ */
+export async function priceItems(db: Tx, opts: { companyId: string; regionId: string; items: PricingItem[] }) {
+  const pricer = await createPricer(db, { companyId: opts.companyId, regionId: opts.regionId });
+  const prices = await pricer.forProducts(opts.items.map((i) => i.product));
+
+  const lines: PricedLine[] = opts.items.map((item) => {
     const p = item.product;
     const pricing = prices.get(p.id)!;
     const r = pricing.at(item.qty);
@@ -175,9 +182,6 @@ export async function priceCart(db: Tx, owner: CartOwner) {
   const subtotalCents = lines.reduce((s, l) => s + l.netCents, 0);
   const vatTotalCents = lines.reduce((s, l) => s + l.vatCents, 0);
   return {
-    cart: full,
-    company,
-    regionId,
     region: pricer.region,
     isExport: pricer.isExport,
     currency: pricer.currency,
@@ -185,11 +189,22 @@ export async function priceCart(db: Tx, owner: CartOwner) {
     subtotalCents,
     vatTotalCents,
     totalCents: subtotalCents + vatTotalCents,
-    cbm: lines.reduce((s, l) => s + Number(l.product.cartonCbm) * l.qty, 0),
-    weightKg: lines.reduce((s, l) => s + Number(l.product.cartonWeightKg) * l.qty, 0),
+    // Rounded to the stored precision so 800 × 0.035 m³ is exactly 28, not 28.000000000000004.
+    cbm: Math.round(lines.reduce((s, l) => s + Number(l.product.cartonCbm) * l.qty, 0) * 10_000) / 10_000,
+    weightKg: Math.round(lines.reduce((s, l) => s + Number(l.product.cartonWeightKg) * l.qty, 0) * 1000) / 1000,
     hasProblems: lines.some((l) => l.problems.length > 0),
     hasOverrides: lines.some((l) => l.override),
   };
+}
+
+/** The cart with every line priced for its delivery region, totals and any blocking problems. */
+export async function priceCart(db: Tx, owner: CartOwner) {
+  const cart = await getOrCreateCart(db, owner);
+  const full = await db.cart.findUniqueOrThrow({ where: { id: cart.id }, include: cartInclude });
+  const company = await db.company.findUniqueOrThrow({ where: { id: owner.companyId } });
+  const regionId = !full.pickup && full.address ? full.address.regionId : company.regionId;
+  const priced = await priceItems(db, { companyId: owner.companyId, regionId, items: full.items });
+  return { cart: full, company, regionId, ...priced };
 }
 
 export type PricedCart = Awaited<ReturnType<typeof priceCart>>;

@@ -186,6 +186,8 @@ export const productSchema = z
       ),
     lowStockThreshold: intField(0, "low-stock threshold"),
     active: checkbox,
+    /** Missing = allowed (keeps CSV imports without the column working). */
+    containerEligible: z.preprocess((v) => (v === undefined || v === "" ? true : v === "true" || v === true || v === "yes" || v === "1"), z.boolean()),
   })
   .refine((p) => p.moq % p.orderMultiple === 0, {
     error: "Minimum order must be a multiple of the order multiple.",
@@ -227,6 +229,9 @@ const optionalDate = (opts: { endOfDay?: boolean } = {}) =>
       }
       return d;
     });
+
+/** An optional date input (Fiji time) for use in other modules' schemas. */
+export const optionalDateField = optionalDate();
 
 const adjustmentKind = z.enum(["PERCENT_OFF", "FIXED_PRICE"]);
 

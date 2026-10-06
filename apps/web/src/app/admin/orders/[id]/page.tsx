@@ -27,6 +27,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
     include: {
       lines: true,
       region: true,
+      containerType: true,
       company: { select: { id: true, name: true, email: true, phone: true } },
       placedBy: { select: { name: true, email: true } },
       events: { orderBy: { createdAt: "asc" }, include: { actor: { select: { name: true } } } },
@@ -188,6 +189,15 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
                     </div>
                   </dd>
                 </div>
+                {order.containerType && (
+                  <div>
+                    <dt className="text-ink-muted">Container</dt>
+                    <dd>
+                      {order.containerType.name} · {Number(order.containerCbm).toFixed(2)} m³ ({Math.round((Number(order.containerCbm) / Number(order.containerType.maxCbm)) * 100)}%) ·{" "}
+                      {Math.round(Number(order.containerWeightKg)).toLocaleString()} kg
+                    </dd>
+                  </div>
+                )}
                 <div>
                   <dt className="text-ink-muted">{order.pickup ? "Pickup" : "Deliver to"}</dt>
                   <dd>{order.pickup ? "VITICO warehouse" : [order.deliveryLabel, order.deliveryLine1, order.deliveryLine2, order.deliveryCity, order.region.name].filter(Boolean).join(", ")}</dd>

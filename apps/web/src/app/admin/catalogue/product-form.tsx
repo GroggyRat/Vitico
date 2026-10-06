@@ -25,6 +25,7 @@ export type ProductFormValues = {
   tags: string;
   lowStockThreshold: number;
   active: boolean;
+  containerEligible: boolean;
 };
 
 export const emptyProduct: ProductFormValues = {
@@ -47,6 +48,7 @@ export const emptyProduct: ProductFormValues = {
   tags: "",
   lowStockThreshold: 10,
   active: true,
+  containerEligible: true,
 };
 
 export function ProductForm({
@@ -122,6 +124,12 @@ export function ProductForm({
             </Field>
             <Field label="Weight per unit (kg)" htmlFor="p-kg" error={e.cartonWeightKg}>
               <Input id="p-kg" name="cartonWeightKg" type="number" min="0" step="0.001" defaultValue={values.cartonWeightKg} required />
+            </Field>
+            <Field label="Container shipping" htmlFor="p-cont" error={e.containerEligible} hint="No for chilled, frozen or hazardous goods">
+              <Select id="p-cont" name="containerEligible" defaultValue={values.containerEligible ? "true" : "false"}>
+                <option value="true">Allowed in dry containers</option>
+                <option value="false">Not allowed</option>
+              </Select>
             </Field>
             <Field label="Low-stock warning at" htmlFor="p-low" error={e.lowStockThreshold}>
               <Input id="p-low" name="lowStockThreshold" type="number" min="0" step="1" defaultValue={values.lowStockThreshold} required />

@@ -90,6 +90,7 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
                 tags: product.tags.join(", "),
                 lowStockThreshold: product.lowStockThreshold,
                 active: product.active,
+                containerEligible: product.containerEligible,
               }}
             />
           </CardBody>

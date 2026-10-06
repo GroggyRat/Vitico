@@ -356,6 +356,16 @@ async function main() {
     }
   }
 
+  // Container types: usable limits (placeholders until VITICO confirms its own).
+  for (const [i, t] of [
+    { code: "20FT", name: "20 ft", maxCbm: 28, maxWeightKg: 21_700 },
+    { code: "40FT", name: "40 ft", maxCbm: 58, maxWeightKg: 26_500 },
+    { code: "40HC", name: "40 ft high cube", maxCbm: 68, maxWeightKg: 26_500 },
+  ].entries()) {
+    await db.containerType.upsert({ where: { code: t.code }, update: {}, create: { ...t, sortOrder: i } });
+  }
+  await db.product.updateMany({ where: { sku: "BTR-SLT-40" }, data: { containerEligible: false } });
+
   // Sample payment details shown to customers (replace with VITICO's real details in Admin → Payment details).
   await db.appSetting.upsert({
     where: { key: "payments" },
