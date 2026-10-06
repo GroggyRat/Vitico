@@ -72,35 +72,35 @@ export function OrderTotals({
 }) {
   return (
     <dl className="ml-auto w-full max-w-xs space-y-1 text-sm">
-      <div className="flex justify-between">
+      <div className="flex justify-between gap-4">
         <dt className="text-ink-muted">Subtotal</dt>
-        <dd className="tabular-nums">{formatFJD(subtotal)}</dd>
+        <dd className="whitespace-nowrap tabular-nums">{formatFJD(subtotal)}</dd>
       </div>
-      <div className="flex justify-between">
+      <div className="flex justify-between gap-4">
         <dt className="text-ink-muted">{isExport ? "VAT (export, 0%)" : "VAT"}</dt>
-        <dd className="tabular-nums">{formatFJD(vat)}</dd>
+        <dd className="whitespace-nowrap tabular-nums">{formatFJD(vat)}</dd>
       </div>
-      <div className="flex justify-between border-t border-line pt-1 text-base font-semibold">
+      <div className="flex justify-between gap-4 border-t border-line pt-1 text-base font-semibold">
         <dt>Total</dt>
-        <dd className="tabular-nums">{formatFJD(total)}</dd>
+        <dd className="whitespace-nowrap tabular-nums">{formatFJD(total)}</dd>
       </div>
       {Number(bond) > 0 && (
-        <div className="flex justify-between text-brand-700">
+        <div className="flex justify-between gap-4 text-brand-700">
           <dt>Deal bond paid</dt>
-          <dd className="tabular-nums">−{formatFJD(bond)}</dd>
+          <dd className="whitespace-nowrap tabular-nums">−{formatFJD(bond)}</dd>
         </div>
       )}
       {Number(rebate) > 0 && (
-        <div className="flex justify-between text-brand-700">
+        <div className="flex justify-between gap-4 text-brand-700">
           <dt>Paid with rebates</dt>
-          <dd className="tabular-nums">−{formatFJD(rebate)}</dd>
+          <dd className="whitespace-nowrap tabular-nums">−{formatFJD(rebate)}</dd>
         </div>
       )}
       {Number(rebate) + Number(bond) > 0 && (
         <>
-          <div className="flex justify-between font-semibold">
+          <div className="flex justify-between gap-4 font-semibold">
             <dt>Amount due</dt>
-            <dd className="tabular-nums">{formatFJD(Number(total) - Number(rebate) - Number(bond))}</dd>
+            <dd className="whitespace-nowrap tabular-nums">{formatFJD(Number(total) - Number(rebate) - Number(bond))}</dd>
           </div>
         </>
       )}

@@ -15,7 +15,7 @@ export type ButtonProps = React.ComponentProps<"button"> & {
 
 export function buttonClass(variant: keyof typeof variants = "primary", size: keyof typeof sizes = "md") {
   return cn(
-    "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed",
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed",
     variants[variant],
     sizes[size],
   );

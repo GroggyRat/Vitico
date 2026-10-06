@@ -40,3 +40,51 @@ body {
   background: var(--canvas);
   color: var(--ink);
 }
+
+/* Phones: tables become stacked cards, one "label  value" line per cell (labels come from
+   StackLabels). Unlayered, so these win over the Tailwind utilities on the cells. */
+@media (max-width: 639px) {
+  [data-stack] thead {
+    display: none;
+  }
+  [data-stack] tbody tr {
+    display: block;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  [data-stack] tbody tr:last-child {
+    border-bottom: 0;
+  }
+  [data-stack] tbody td {
+    display: block;
+    padding: 0.2rem 0;
+    border: 0;
+    text-align: right;
+  }
+  [data-stack] tbody td::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+  [data-stack] tbody td[data-label]::before {
+    content: attr(data-label);
+    float: left;
+    margin-right: 1rem;
+    padding-top: 0.1rem;
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+  }
+  [data-stack] tbody td:first-child {
+    text-align: left;
+    font-weight: 500;
+  }
+  [data-stack] tbody td:first-child::before {
+    content: none;
+  }
+  [data-stack] tbody td[colspan] {
+    display: block;
+    text-align: center;
+    font-weight: 400;
+    padding: 1.5rem 0;
+  }
+}

@@ -69,14 +69,14 @@ export default async function CataloguePage({ searchParams }: PageProps<"/portal
           Search
         </button>
       </form>
-      <nav aria-label="Categories" className="mb-6 flex flex-wrap gap-2">
+      <nav aria-label="Categories" className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {[{ slug: "", name: "All" }, ...topLevel].map((c) => (
           <Link
             key={c.slug || "all"}
             href={href({ category: c.slug, page: "" })}
             aria-current={category === c.slug ? "page" : undefined}
             className={cn(
-              "rounded-md border px-3 py-1 text-sm",
+              "shrink-0 whitespace-nowrap rounded-md border px-3 py-1 text-sm",
               category === c.slug ? "border-brand-600 bg-brand-600 text-white" : "border-line bg-surface text-ink-muted hover:text-ink",
             )}
           >
@@ -96,11 +96,11 @@ export default async function CataloguePage({ searchParams }: PageProps<"/portal
             const href = `/portal/catalogue/${encodeURIComponent(p.sku)}`;
             return (
               <li key={p.id}>
-                <Card className="flex h-full flex-col overflow-hidden transition-colors hover:border-brand-500">
-                  <Link href={href} tabIndex={-1} aria-hidden>
-                    <ProductImage src={p.imageUrl} name={p.name} className="aspect-[4/3] w-full text-3xl" />
+                <Card className="flex h-full overflow-hidden transition-colors hover:border-brand-500 sm:flex-col">
+                  <Link href={href} tabIndex={-1} aria-hidden className="w-24 shrink-0 sm:w-full">
+                    <ProductImage src={p.imageUrl} name={p.name} className="aspect-square w-full sm:aspect-[4/3]" />
                   </Link>
-                  <div className="flex flex-1 flex-col gap-1 p-4">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1 p-3 sm:p-4">
                     {p.brand && <div className="text-xs font-medium uppercase tracking-wide text-ink-muted">{p.brand}</div>}
                     <Link href={href} className="font-medium leading-snug hover:text-brand-700">
                       {p.name}

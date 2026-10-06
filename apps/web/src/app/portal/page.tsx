@@ -20,7 +20,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
     <Card>
       <CardBody>
         <div className="text-sm text-ink-muted">{label}</div>
-        <div className="mt-1 text-2xl font-semibold tracking-tight">{value}</div>
+        <div className="mt-1 text-lg font-semibold tracking-tight sm:text-2xl">{value}</div>
         {note && <div className="mt-1 text-xs text-ink-muted">{note}</div>}
       </CardBody>
     </Card>
@@ -53,7 +53,7 @@ export default async function PortalDashboard() {
     <>
       <PageHeader title={`Bula, ${user.name.split(" ")[0]}`} description={company.name} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label="Customer tier" value={company.tier.name} />
         <Stat
           label="Delivery region"
@@ -72,7 +72,7 @@ export default async function PortalDashboard() {
         )}
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:gap-4">
         <Link href="/portal/rebates" className="block">
           <Stat
             label="Rebate wallet"

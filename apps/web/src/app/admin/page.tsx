@@ -37,7 +37,7 @@ export default async function AdminHome() {
   return (
     <>
       <PageHeader title={`Bula, ${user.name.split(" ")[0]}`} description="VITICO Wholesale administration" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         {tiles.map((t) => {
           const body = (
             <Card className={t.href ? "transition-colors hover:border-brand-500" : undefined}>

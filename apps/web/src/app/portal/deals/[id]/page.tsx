@@ -73,17 +73,17 @@ export default async function DealPage({ params }: PageProps<"/portal/deals/[id]
                 </tbody>
               </table>
               <dl className="mt-4 space-y-1 border-t border-line pt-3 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <dt className="text-ink-muted">Your normal price</dt>
-                  <dd className="tabular-nums">{formatCents(unit.normalNetCents)}</dd>
+                  <dd className="whitespace-nowrap tabular-nums">{formatCents(unit.normalNetCents)}</dd>
                 </div>
-                <div className="flex justify-between font-semibold">
+                <div className="flex justify-between gap-4 font-semibold">
                   <dt>Deal price per unit, excl. VAT</dt>
-                  <dd className="tabular-nums">{formatCents(unit.subtotalCents)}</dd>
+                  <dd className="whitespace-nowrap tabular-nums">{formatCents(unit.subtotalCents)}</dd>
                 </div>
-                <div className="flex justify-between text-ink-muted">
+                <div className="flex justify-between gap-4 text-ink-muted">
                   <dt>Incl. VAT</dt>
-                  <dd className="tabular-nums">{formatCents(unit.totalCents)}</dd>
+                  <dd className="whitespace-nowrap tabular-nums">{formatCents(unit.totalCents)}</dd>
                 </div>
               </dl>
             </CardBody>

@@ -54,7 +54,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/adm
               title="Publish"
               description="Sets aside the stock for every unit now. Customers are told when the deal starts."
               actions={
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <ActionButton action={deleteDealAction.bind(null, deal.id)} confirm="Delete this draft?">
                     Delete draft
                   </ActionButton>
@@ -138,23 +138,23 @@ export default async function DealPage({ params, searchParams }: PageProps<"/adm
               <CardHeader title="Deal" />
               <CardBody>
                 <dl className="space-y-1 text-sm">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <dt className="text-ink-muted">Price per unit</dt>
-                    <dd className="tabular-nums">{formatFJD(deal.dealPrice)}</dd>
+                    <dd className="whitespace-nowrap tabular-nums">{formatFJD(deal.dealPrice)}</dd>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <dt className="text-ink-muted">Normal base value</dt>
-                    <dd className="tabular-nums">{formatFJD(normalValue)}</dd>
+                    <dd className="whitespace-nowrap tabular-nums">{formatFJD(normalValue)}</dd>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <dt className="text-ink-muted">Bond</dt>
                     <dd>{Number(deal.bondPercent)}%</dd>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <dt className="text-ink-muted">Most per customer</dt>
                     <dd>{deal.maxPerCustomer}</dd>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-4">
                     <dt className="text-ink-muted">Days to complete</dt>
                     <dd>{deal.completionDays}</dd>
                   </div>
