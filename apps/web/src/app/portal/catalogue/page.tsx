@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PriceTag } from "@/components/catalogue/price-tag";
 import { ProductImage } from "@/components/catalogue/product-image";
 import { StockBadge } from "@/components/catalogue/stock-badge";
 import { buttonClass } from "@/components/ui/button";
@@ -11,12 +12,13 @@ import { getCategoryTree } from "@/lib/categories";
 import { cn } from "@/lib/cn";
 import { getDb } from "@/lib/db";
 import { CATALOGUE_PAGE_SIZE, catalogueWhere, categoryWithDescendants } from "@/server/services/catalogue";
+import { createPricer } from "@/server/services/pricing";
 import { availableOf, stockStatus } from "@/server/services/stock";
 
 export const metadata: Metadata = { title: "Products" };
 
 export default async function CataloguePage({ searchParams }: PageProps<"/portal/catalogue">) {
-  await requireCustomer();
+  const { actor } = await requireCustomer();
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const category = typeof sp.category === "string" ? sp.category : "";
@@ -39,6 +41,8 @@ export default async function CataloguePage({ searchParams }: PageProps<"/portal
     }),
     db.product.count({ where }),
   ]);
+  const pricer = await createPricer(db, { companyId: actor.companyId });
+  const prices = await pricer.forProducts(products);
   const pages = Math.max(1, Math.ceil(total / CATALOGUE_PAGE_SIZE));
   const topLevel = tree.filter((c) => c.depth === 0);
   const href = (patch: Record<string, string>) => {
@@ -93,7 +97,22 @@ export default async function CataloguePage({ searchParams }: PageProps<"/portal
                       {p.sellUnit}
                       {p.moq > 1 && ` · min ${p.moq}`}
                     </div>
-                    <div className="mt-auto pt-3">
+                    <div className="mt-auto space-y-2 pt-3">
+                      {(() => {
+                        const pp = prices.get(p.id)!;
+                        const r = pp.at(p.moq);
+                        return (
+                          <PriceTag
+                            unitCents={r.unitCents}
+                            baseCents={r.baseCents}
+                            label={r.label}
+                            sellUnit={p.sellUnit.split(" ")[0]}
+                            vatPercent={pp.vatPercent}
+                            currency={pricer.currency}
+                            fcccSavingPercent={pp.fccc?.savingPercent}
+                          />
+                        );
+                      })()}
                       <StockBadge status={stockStatus(availableOf(p.stock), p.lowStockThreshold)} />
                     </div>
                   </div>

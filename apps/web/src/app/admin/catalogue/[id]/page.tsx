@@ -14,6 +14,7 @@ import { getDb } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 import { availableOf, stockStatus } from "@/server/services/stock";
 import { ProductForm } from "../product-form";
+import { PricingPanel } from "./pricing-panel";
 import { StockForm } from "./stock-form";
 
 export const metadata: Metadata = { title: "Product" };
@@ -119,6 +120,7 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
               {staffCan(actor.staffRole, "stock.adjust") && <StockForm productId={product.id} />}
             </CardBody>
           </Card>
+          <PricingPanel productId={product.id} basePrice={Number(product.basePrice)} canEdit={staffCan(actor.staffRole, "settings.pricing")} />
         </div>
       </div>
 
