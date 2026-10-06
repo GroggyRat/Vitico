@@ -17,22 +17,43 @@ import { companyScope } from "../services/companies";
 import { moveStock } from "../services/stock";
 import { type CartOwner, clearCart, getOrCreateCart, priceCart } from "./cart";
 import { companyUserIds, notify, ownersOf, staffForCompany, staffWith } from "../notifications/notify";
+import { enqueueOdoo } from "../odoo/sync";
+import { onOrderCompleted, onOrderPaid, redeemRebate, refundOrderRebate } from "../rebates/service";
 import { HOLDS_STOCK, canTransition, statusLabel } from "./status";
 
 type Tx = Prisma.TransactionClient;
 
 // ─── Credit ──────────────────────────────────────────────────────────────────
 
-/** Credit limit minus on-account orders not yet marked paid. Odoo balances replace this later. */
+/**
+ * Credit limit minus what's owed. Once the customer is linked to Odoo, "owed" is Odoo's
+ * receivable balance plus on-account orders Odoo hasn't invoiced yet; before that it's
+ * every on-account order not yet marked paid.
+ */
 export async function creditAvailable(db: Db | Tx, companyId: string) {
   const company = await db.company.findUniqueOrThrow({ where: { id: companyId } });
+  const fromOdoo = company.odooSyncedAt !== null;
   const open = await db.order.aggregate({
-    where: { companyId, paymentStatus: PaymentStatus.ON_ACCOUNT, status: { not: S.CANCELLED } },
-    _sum: { total: true },
+    where: {
+      companyId,
+      paymentStatus: PaymentStatus.ON_ACCOUNT,
+      status: { not: S.CANCELLED },
+      ...(fromOdoo && { odooInvoiced: false }),
+    },
+    _sum: { total: true, rebateApplied: true },
   });
   const limitCents = toCents(company.creditLimit);
-  const usedCents = toCents(open._sum.total ?? 0);
-  return { limitCents, usedCents, availableCents: limitCents - usedCents, termsDays: company.paymentTermsDays };
+  const openCents = toCents(open._sum.total ?? 0) - toCents(open._sum.rebateApplied ?? 0);
+  const usedCents = fromOdoo ? toCents(company.odooReceivable ?? 0) + openCents : openCents;
+  return {
+    limitCents,
+    usedCents,
+    availableCents: limitCents - usedCents,
+    termsDays: company.paymentTermsDays,
+    overdueCents: toCents(company.odooOverdue ?? 0),
+    source: fromOdoo ? ("odoo" as const) : ("portal" as const),
+    syncedAt: company.odooSyncedAt,
+  };
 }
 
 export const CUSTOMER_PAYMENT_METHODS: PaymentMethod[] = [
@@ -74,9 +95,15 @@ async function releaseStock(tx: Tx, order: { id: string; lines: { productId: str
 
 async function setStatus(tx: Tx, order: { id: string; status: OrderStatus }, to: OrderStatus, actorId: string | null, note?: string | null, data: Prisma.OrderUpdateInput = {}) {
   if (!canTransition(order.status, to)) throw new ServiceError(`Can't move an order from ${order.status} to ${to}.`);
-  const updated = await tx.order.update({ where: { id: order.id }, data: { ...data, status: to } });
+  const updated = await tx.order.update({ where: { id: order.id }, data: { ...data, status: to, ...(to === S.COMPLETED && { completedAt: new Date() }) } });
+  if (to === S.COMPLETED) await onOrderCompleted(tx, order.id);
   await event(tx, order.id, { type: "status", from: order.status, to, note, actorId });
   await notifyStatus(tx, updated, to, note);
+  // Odoo gets the sale order once VITICO confirms it; cancellations follow.
+  if (to === S.CONFIRMED && !updated.odooOrderId) await enqueueOdoo(tx, "ORDER_PUSH", order.id);
+  if (to === S.CANCELLED && (updated.odooOrderId || (await tx.odooSyncTask.count({ where: { kind: "ORDER_PUSH", entityId: order.id } })))) {
+    await enqueueOdoo(tx, "ORDER_CANCEL", order.id);
+  }
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────
@@ -144,7 +171,8 @@ export type Placer =
  * Turns the cart into an order. Prices are recalculated here, stock is reserved
  * (locked per product), credit is checked, and approval steps are decided.
  */
-export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, paymentMethod: PaymentMethod) {
+export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, paymentMethod: PaymentMethod, opts: { rebateCents?: number } = {}) {
+  const rebateCents = Math.max(0, Math.round(opts.rebateCents ?? 0));
   if (placer.kind === "customer" && !companyCan(placer.actor.companyRole, "orders.place")) {
     throw new ServiceError("Your role can't place orders.");
   }
@@ -172,12 +200,15 @@ export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, payme
       if (!cart.pickup && !cart.address) throw new ServiceError("Choose a delivery address or pickup.");
       if (priced.hasOverrides && placer.kind !== "staff") throw new ServiceError("Manual prices can only be set by VITICO staff.");
 
-      if (paymentMethod === PaymentMethod.ON_ACCOUNT) {
+      if (rebateCents > priced.totalCents) throw new ServiceError("You can't use more rebate than the order total.", "rebate");
+      const dueCents = priced.totalCents - rebateCents;
+      const fullyCovered = rebateCents > 0 && dueCents === 0;
+      if (paymentMethod === PaymentMethod.ON_ACCOUNT && !fullyCovered) {
         const credit = await creditAvailable(tx, company.id);
         if (credit.limitCents <= 0) throw new ServiceError("This account doesn't have credit terms. Choose another payment method.", "paymentMethod");
-        if (priced.totalCents > credit.availableCents) {
+        if (dueCents > credit.availableCents) {
           throw new ServiceError(
-            `This order (${fromCents(priced.totalCents).toFixed(2)}) is more than your available credit (${fromCents(Math.max(0, credit.availableCents)).toFixed(2)}).`,
+            `This order (${fromCents(dueCents).toFixed(2)}) is more than your available credit (${fromCents(Math.max(0, credit.availableCents)).toFixed(2)}).`,
             "paymentMethod",
           );
         }
@@ -210,8 +241,10 @@ export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, payme
           subtotal: fromCents(priced.subtotalCents),
           vatTotal: fromCents(priced.vatTotalCents),
           total: fromCents(priced.totalCents),
-          paymentMethod,
-          paymentStatus: paymentMethod === PaymentMethod.ON_ACCOUNT ? PaymentStatus.ON_ACCOUNT : PaymentStatus.UNPAID,
+          paymentMethod: fullyCovered ? PaymentMethod.REBATE_WALLET : paymentMethod,
+          paymentStatus: fullyCovered ? PaymentStatus.PAID : paymentMethod === PaymentMethod.ON_ACCOUNT ? PaymentStatus.ON_ACCOUNT : PaymentStatus.UNPAID,
+          rebateApplied: fromCents(rebateCents),
+          paidAt: fullyCovered ? new Date() : null,
           submittedAt: status === S.SUBMITTED ? new Date() : null,
           lines: {
             create: priced.lines.map((l) => ({
@@ -222,6 +255,7 @@ export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, payme
               qty: l.qty,
               unitPrice: fromCents(l.unitCents),
               calculatedUnitPrice: fromCents(l.calculatedCents),
+              baseUnitPrice: l.product.basePrice,
               priceSource: l.priceSource,
               priceLabel: l.priceLabel,
               overrideReason: l.override?.reason ?? null,
@@ -245,6 +279,9 @@ export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, payme
         }
       }
 
+      if (rebateCents > 0) {
+        await redeemRebate(tx, company.id, rebateCents, { orderId: order.id, description: `Used on order ${order.number}`, actorId });
+      }
       await event(tx, order.id, {
         type: "placed",
         to: status,
@@ -325,6 +362,7 @@ export async function cancelOrder(db: Db, actor: CustomerActor | StaffActor, ord
     }
     if (!canTransition(order.status, S.CANCELLED)) throw new ServiceError("This order can't be cancelled.");
     if (HOLDS_STOCK.includes(order.status)) await releaseStock(tx, order, actor.id);
+    await refundOrderRebate(tx, order);
     await setStatus(tx, order, S.CANCELLED, actor.id, reason, { cancelReason: reason });
   });
 }
@@ -424,8 +462,10 @@ export async function reviewPayment(db: Db, actor: StaffActor, paymentId: string
     const all = await tx.payment.findMany({ where: { orderId: order.id } });
     const verifiedCents = all.filter((p) => p.status === PaymentRecordStatus.VERIFIED).reduce((s, p) => s + toCents(p.amount), 0);
     const pending = all.some((p) => p.status === PaymentRecordStatus.PENDING);
-    const paymentStatus = verifiedCents >= toCents(order.total) ? PaymentStatus.PAID : pending ? PaymentStatus.PENDING_VERIFICATION : PaymentStatus.UNPAID;
+    const dueCents = toCents(order.total) - toCents(order.rebateApplied);
+    const paymentStatus = verifiedCents >= dueCents ? PaymentStatus.PAID : pending ? PaymentStatus.PENDING_VERIFICATION : PaymentStatus.UNPAID;
     await tx.order.update({ where: { id: order.id }, data: { paymentStatus } });
+    if (paymentStatus === PaymentStatus.PAID) await onOrderPaid(tx, order.id);
     await event(tx, order.id, {
       type: verdict.verified ? "payment_verified" : "payment_rejected",
       note: verdict.verified ? `${payment.amount.toFixed(2)} ref ${payment.reference}` : verdict.reason,
@@ -448,6 +488,7 @@ export async function markAccountOrderPaid(db: Db, actor: StaffActor, orderId: s
     const order = await lockOrder(tx, orderId);
     if (order.paymentStatus !== PaymentStatus.ON_ACCOUNT) throw new ServiceError("This isn't an unpaid credit-account order.");
     await tx.order.update({ where: { id: orderId }, data: { paymentStatus: PaymentStatus.PAID } });
+    await onOrderPaid(tx, orderId);
     await event(tx, orderId, { type: "account_paid", note: "Invoice settled", actorId: actor.id });
   });
 }

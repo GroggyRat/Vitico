@@ -52,10 +52,10 @@ const regions: RegionSeed[] = [
 ];
 
 const tiers = [
-  { code: "STANDARD", name: "Standard", discountPercent: 0 },
-  { code: "PLUS", name: "Plus", discountPercent: 3 },
-  { code: "VIP", name: "VIP", discountPercent: 5 },
-  { code: "PARTNER", name: "Partner", discountPercent: 8 },
+  { code: "STANDARD", name: "Standard", discountPercent: 0, minAnnualSpend: 0 },
+  { code: "PLUS", name: "Plus", discountPercent: 3, minAnnualSpend: 50_000 },
+  { code: "VIP", name: "VIP", discountPercent: 5, minAnnualSpend: 200_000 },
+  { code: "PARTNER", name: "Partner", discountPercent: 8, minAnnualSpend: 750_000 },
 ];
 
 const staff = [
@@ -177,7 +177,7 @@ async function main() {
   }
 
   for (const [i, t] of tiers.entries()) {
-    const data = { name: t.name, discountPercent: t.discountPercent, sortOrder: i };
+    const data = { name: t.name, discountPercent: t.discountPercent, minAnnualSpend: t.minAnnualSpend, sortOrder: i };
     await db.tier.upsert({ where: { code: t.code }, update: data, create: { code: t.code, ...data } });
   }
 
@@ -326,6 +326,36 @@ async function main() {
       });
     }
   }
+  // Sample rebate programmes.
+  if (newProducts > 0) {
+    const plusAndUp = await db.tier.findMany({ where: { code: { in: ["PLUS", "VIP", "PARTNER"] } } });
+    await db.rebateRule.create({
+      data: {
+        name: "Quarterly volume rebate",
+        type: "SPEND_TARGET",
+        period: "QUARTER",
+        steps: [
+          { threshold: 25_000, percent: 1 },
+          { threshold: 75_000, percent: 2 },
+          { threshold: 150_000, percent: 3 },
+        ],
+        expiryDays: 180,
+      },
+    });
+    const staples = await db.category.findUniqueOrThrow({ where: { slug: "rice-flour-grains" } });
+    await db.rebateRule.create({
+      data: { name: "Staples cashback", type: "CASHBACK", percent: 1.5, categoryIds: [staples.id], tierIds: plusAndUp.map((t) => t.id), expiryDays: 90 },
+    });
+    await db.rebateRule.create({ data: { name: "Pay-in-7-days rebate", type: "EARLY_PAYMENT", percent: 1, earlyPaymentDays: 7, expiryDays: 90 } });
+    const bulaMart = await db.company.findFirst({ where: { name: "Bula Mart Supermarket Ltd" } });
+    if (bulaMart) {
+      await db.rebateRule.create({ data: { name: "2026 supply agreement rebate", type: "CONTRACT", companyId: bulaMart.id, period: "YEAR", percent: 1 } });
+      await db.rebateCredit.create({
+        data: { companyId: bulaMart.id, description: "Welcome credit", amount: 250, remaining: 250, status: "AVAILABLE", availableAt: new Date(), expiresAt: new Date(Date.now() + 120 * 86_400_000) },
+      });
+    }
+  }
+
   // Sample payment details shown to customers (replace with VITICO's real details in Admin → Payment details).
   await db.appSetting.upsert({
     where: { key: "payments" },

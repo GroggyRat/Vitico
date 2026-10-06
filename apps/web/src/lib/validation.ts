@@ -124,6 +124,10 @@ export const regionUpdateSchema = z.object({
 export const tierUpdateSchema = z.object({
   name: trimmed().min(2).max(50),
   discountPercent: z.coerce.number().min(0).max(100),
+  minAnnualSpend: z
+    .union([z.literal(""), z.coerce.number().min(0)])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? null : v)),
 });
 
 export const addressSchema = z.object({
@@ -378,4 +382,43 @@ export const templateSchema = z.object({
 export const pushSubscriptionSchema = z.object({
   endpoint: z.string().url(),
   keys: z.object({ p256dh: z.string().min(10).max(500), auth: z.string().min(5).max(500) }),
+});
+
+// ─── Rebates ─────────────────────────────────────────────────────────────────
+
+const optionalInt = z
+  .union([z.literal(""), z.coerce.number().int().min(0).max(100_000)])
+  .optional()
+  .transform((v) => (v === "" || v === undefined ? null : v));
+
+export const rebateRuleSchema = z.object({
+  name: trimmed().min(2, { error: "Name the programme." }).max(100),
+  description: optionalText(),
+  type: z.enum(["SPEND_TARGET", "CASHBACK", "EARLY_PAYMENT", "CONTRACT"]),
+  active: checkbox,
+  startsAt: optionalDate(),
+  endsAt: optionalDate({ endOfDay: true }),
+  tierIds: z.array(z.string()).default([]),
+  companyId: optionalText(),
+  period: z
+    .union([z.literal(""), z.enum(["MONTH", "QUARTER", "YEAR"])])
+    .optional()
+    .transform((v) => v || null),
+  percent: z
+    .union([z.literal(""), z.coerce.number().min(0).max(100)])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? null : v)),
+  steps: z.array(z.object({ threshold: z.number().positive(), percent: z.number().positive().max(100) })).default([]),
+  categoryIds: z.array(z.string()).default([]),
+  skus: z
+    .string()
+    .optional()
+    .transform((v) => [...new Set((v ?? "").split(/[\s,]+/).map((s) => s.trim().toUpperCase()).filter(Boolean))]),
+  earlyPaymentDays: optionalInt,
+  expiryDays: optionalInt,
+});
+
+export const walletAdjustSchema = z.object({
+  amount: z.coerce.number({ error: "Enter an amount." }).refine((v) => v !== 0 && Math.abs(v) <= 1_000_000, { error: "Enter an amount other than zero." }),
+  reason: trimmed().min(3, { error: "Give a reason." }).max(300),
 });

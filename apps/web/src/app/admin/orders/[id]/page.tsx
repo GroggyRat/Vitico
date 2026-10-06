@@ -85,7 +85,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
             <CardHeader title="Items" />
             <OrderLines lines={order.lines} showCalculated />
             <CardBody>
-              <OrderTotals subtotal={order.subtotal} vat={order.vatTotal} total={order.total} isExport={order.isExport} />
+              <OrderTotals subtotal={order.subtotal} vat={order.vatTotal} total={order.total} isExport={order.isExport} rebate={order.rebateApplied} />
             </CardBody>
           </Card>
 

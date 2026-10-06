@@ -97,19 +97,19 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/po
             <CardHeader title="Items" />
             <OrderLines lines={order.lines} />
             <CardBody>
-              <OrderTotals subtotal={order.subtotal} vat={order.vatTotal} total={order.total} isExport={order.isExport} />
+              <OrderTotals subtotal={order.subtotal} vat={order.vatTotal} total={order.total} isExport={order.isExport} rebate={order.rebateApplied} />
             </CardBody>
           </Card>
 
           {needsPayment && canPay && (
             <Card>
-              <CardHeader title="Payment" description={`${paymentMethodLabel[order.paymentMethod]} · ${formatFJD(order.total)} due before dispatch`} />
+              <CardHeader title="Payment" description={`${paymentMethodLabel[order.paymentMethod]} · ${formatFJD(Number(order.total) - Number(order.rebateApplied))} due before dispatch`} />
               <CardBody className="space-y-5">
                 <PaymentInstructions method={order.paymentMethod} settings={settings} reference={order.number} />
                 {order.paymentStatus === "PENDING_VERIFICATION" ? (
                   <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700">We&apos;ve received your payment details and are confirming them.</p>
                 ) : (
-                  <PaymentForm action={submitPaymentAction.bind(null, order.id)} defaultMethod={order.paymentMethod} amount={order.total.toString()} />
+                  <PaymentForm action={submitPaymentAction.bind(null, order.id)} defaultMethod={order.paymentMethod} amount={(Number(order.total) - Number(order.rebateApplied)).toFixed(2)} />
                 )}
               </CardBody>
             </Card>

@@ -13,12 +13,14 @@ const nav: { href: string; label: string; capability: StaffCapability; exact?: b
   { href: "/admin/payments", label: "Payments", capability: "payments.verify" },
   { href: "/admin/catalogue", label: "Catalogue", capability: "catalogue.view" },
   { href: "/admin/pricing", label: "Pricing", capability: "settings.pricing" },
+  { href: "/admin/rebates", label: "Rebates", capability: "rebates.manage" },
   { href: "/admin/pricing/check", label: "Price check", capability: "pricing.check" },
   { href: "/admin/staff", label: "Staff", capability: "staff.manage" },
   { href: "/admin/settings/regions", label: "Regions", capability: "settings.pricing" },
   { href: "/admin/settings/tiers", label: "Tiers", capability: "settings.pricing" },
   { href: "/admin/settings/payments", label: "Payment details", capability: "settings.payments" },
   { href: "/admin/settings/messages", label: "Messages", capability: "settings.messages" },
+  { href: "/admin/integrations/odoo", label: "Odoo", capability: "integrations.manage" },
   { href: "/admin/audit", label: "Audit log", capability: "audit.view" },
 ];
 

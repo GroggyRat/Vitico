@@ -5,6 +5,7 @@ import type { StaffActor } from "../actors";
 import { audit } from "../audit";
 import { ServiceError } from "../errors";
 import { notify, ownersOf } from "../notifications/notify";
+import { enqueueOdoo } from "../odoo/sync";
 
 /** Restricts company queries to what this staff member may see. */
 export function companyScope(actor: StaffActor): Prisma.CompanyWhereInput {
@@ -72,6 +73,7 @@ export async function approveCompany(db: Db, actor: StaffActor, companyId: strin
       data: { ...input },
     });
     const company = await tx.company.findUniqueOrThrow({ where: { id: companyId } });
+    await enqueueOdoo(tx, "PARTNER_PUSH", companyId);
     await notify(tx, { type: "account.approved", userIds: await ownersOf(tx, companyId), vars: { company: company.name }, link: "/portal" });
   });
 }
@@ -118,12 +120,13 @@ export async function updateCompany(db: Db, actor: StaffActor, companyId: string
     Object.assign(data, { creditLimit: input.creditLimit, paymentTermsDays: input.paymentTermsDays });
   }
 
-  await db.$transaction([
-    db.company.update({ where: { id: companyId }, data }),
-    db.auditLog.create({
+  await db.$transaction(async (tx) => {
+    await tx.company.update({ where: { id: companyId }, data });
+    await tx.auditLog.create({
       data: { actorId: actor.id, action: "company.updated", entityType: "Company", entityId: companyId, data: data as Prisma.InputJsonValue },
-    }),
-  ]);
+    });
+    if (company.status === "ACTIVE" && canEdit) await enqueueOdoo(tx, "PARTNER_PUSH", companyId);
+  });
 }
 
 export async function setCompanySuspended(db: Db, actor: StaffActor, companyId: string, suspended: boolean) {
@@ -140,5 +143,16 @@ export async function setCompanySuspended(db: Db, actor: StaffActor, companyId: 
       entityType: "Company",
       entityId: companyId,
     });
+  });
+}
+
+export async function changeTier(db: Db, actor: StaffActor, companyId: string, tierId: string) {
+  if (!staffCan(actor.staffRole, "companies.edit")) throw new ServiceError("You can't change tiers.");
+  await db.$transaction(async (tx) => {
+    const company = await tx.company.findUnique({ where: { id: companyId }, include: { tier: true } });
+    const tier = await tx.tier.findUnique({ where: { id: tierId } });
+    if (!company || !tier) throw new ServiceError("Not found.");
+    await tx.company.update({ where: { id: companyId }, data: { tierId } });
+    await audit(tx, { actorId: actor.id, action: "company.tier_changed", entityType: "Company", entityId: companyId, data: { from: company.tier.code, to: tier.code } });
   });
 }

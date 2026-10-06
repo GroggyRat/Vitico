@@ -11,12 +11,15 @@ import { Table, Td, Th } from "@/components/ui/table";
 import { requireStaff } from "@/lib/auth/guards";
 import { companyRoleLabels, staffCan } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
-import { formatDate, formatDateTime, formatFJD } from "@/lib/format";
+import { formatCents, formatDate, formatDateTime, formatFJD } from "@/lib/format";
 import { getCompanyForStaff } from "@/server/services/companies";
 import { resetLinkAction, setCompanySuspendedAction } from "../../actions";
 import { getAssignmentOptions } from "../../options";
 import { companyStatusLabel, companyStatusTone } from "../../status";
 import { EditCompanyForm } from "./edit-form";
+import { WalletAdjustForm } from "./wallet-form";
+import { adjustWalletAction } from "../../rebates/actions";
+import { walletBalance } from "@/server/rebates/service";
 
 export const metadata: Metadata = { title: "Customer" };
 
@@ -28,6 +31,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
   if (!company) notFound();
 
   const canEdit = staffCan(actor.staffRole, "companies.edit");
+  const wallet = await walletBalance(getDb(), company.id);
   const canCredit = staffCan(actor.staffRole, "companies.credit");
   const settled = company.status === CompanyStatus.ACTIVE || company.status === CompanyStatus.SUSPENDED;
 
@@ -130,6 +134,35 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
             )}
           </CardBody>
         </Card>
+
+        {settled && (
+          <Card>
+            <CardHeader title="Rebate wallet" description={`${formatCents(wallet.availableCents)} available · ${formatCents(wallet.pendingCents)} pending`} />
+            {staffCan(actor.staffRole, "rebates.manage") && (
+              <CardBody>
+                <WalletAdjustForm action={adjustWalletAction.bind(null, company.id)} />
+              </CardBody>
+            )}
+          </Card>
+        )}
+
+        {(company.odooPartnerId || company.odooSyncedAt) && (
+          <Card>
+            <CardHeader title="Odoo" />
+            <CardBody>
+              <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+                <dt className="text-ink-muted">Partner ID</dt>
+                <dd>{company.odooPartnerId ?? "—"}</dd>
+                <dt className="text-ink-muted">Balance owing</dt>
+                <dd>{formatFJD(company.odooReceivable)}</dd>
+                <dt className="text-ink-muted">Overdue</dt>
+                <dd className={Number(company.odooOverdue ?? 0) > 0 ? "font-medium text-red-600" : ""}>{formatFJD(company.odooOverdue)}</dd>
+                <dt className="text-ink-muted">Last synced</dt>
+                <dd>{formatDateTime(company.odooSyncedAt)}</dd>
+              </dl>
+            </CardBody>
+          </Card>
+        )}
 
         <Card>
           <CardHeader title="Users" />

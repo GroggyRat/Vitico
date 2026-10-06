@@ -69,18 +69,26 @@ export function CheckoutForm({
   action,
   methods,
   disabledReason,
+  rebateMaxCents = 0,
 }: {
   action: Action;
   methods: { value: string; label: string; hint?: string; disabled?: boolean }[];
   disabledReason: string | null;
+  /** Rebate wallet value the customer may apply (min of balance and order total). */
+  rebateMaxCents?: number;
 }) {
   const [state, run] = useActionState(action, undefined);
   const firstEnabled = methods.find((m) => !m.disabled)?.value;
   return (
     <form action={run} className="space-y-4">
       <FormMessage state={state} />
+      {rebateMaxCents > 0 && (
+        <Field label="Use rebate balance (FJD)" htmlFor="co-rebate" error={state?.errors?.rebate} hint={`Up to ${(rebateMaxCents / 100).toFixed(2)} available for this order`}>
+          <Input id="co-rebate" name="rebate" type="number" min="0" max={(rebateMaxCents / 100).toFixed(2)} step="0.01" defaultValue="0" />
+        </Field>
+      )}
       <fieldset className="space-y-2">
-        <legend className="mb-1 text-sm font-medium">Payment</legend>
+        <legend className="mb-1 text-sm font-medium">Payment {rebateMaxCents > 0 && <span className="font-normal text-ink-muted">(for anything not covered by rebates)</span>}</legend>
         {methods.map((m) => (
           <label key={m.value} className={`flex items-start gap-2 rounded-md border border-line p-3 text-sm ${m.disabled ? "opacity-60" : "cursor-pointer hover:bg-canvas"}`}>
             <input type="radio" name="paymentMethod" value={m.value} defaultChecked={m.value === firstEnabled} disabled={m.disabled} className="mt-0.5 accent-brand-600" />
