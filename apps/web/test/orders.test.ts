@@ -236,7 +236,7 @@ describe("cart creation", () => {
   it("is safe when the first requests arrive at the same time", async () => {
     const owner = { userId: company.owner.id, companyId: company.company.id, isStaff: false };
     const { getOrCreateCart } = await import("@/server/orders/cart");
-    const carts = await Promise.all(Array.from({ length: 6 }, () => getOrCreateCart(db, owner)));
+    const carts = await Promise.all(Array.from({ length: 20 }, () => getOrCreateCart(db, owner)));
     expect(new Set(carts.map((c) => c.id)).size).toBe(1);
   });
 });
