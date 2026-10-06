@@ -1,14 +1,16 @@
 @import "tailwindcss";
 
-/* Placeholder theme until VITICO brand colours are supplied (SPEC §18).
+/* VITICO brand: navy #132263 from the wordmark, sky #67b5f5 from the smile.
    Swap the --brand-* tokens to rebrand the whole app. */
 :root {
-  --brand-50: #effaf8;
-  --brand-100: #d6f1ec;
-  --brand-500: #14907f;
-  --brand-600: #0f766a;
-  --brand-700: #0d5f56;
-  --brand-900: #0b3b36;
+  --brand-50: #eef1f9;
+  --brand-100: #dbe1f1;
+  --brand-500: #3b5bb5;
+  --brand-600: #1c2f80;
+  --brand-700: #132263;
+  --brand-900: #0b1540;
+  --sky-400: #67b5f5;
+  --sky-50: #eef6fe;
   --surface: #ffffff;
   --canvas: #f5f6f7;
   --ink: #16191d;
@@ -24,6 +26,8 @@
   --color-brand-600: var(--brand-600);
   --color-brand-700: var(--brand-700);
   --color-brand-900: var(--brand-900);
+  --color-sky-400: var(--sky-400);
+  --color-sky-50: var(--sky-50);
   --color-surface: var(--surface);
   --color-canvas: var(--canvas);
   --color-ink: var(--ink);

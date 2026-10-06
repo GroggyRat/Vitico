@@ -1,3 +1,5 @@
+import { APP_URL } from "@/lib/env";
+
 /**
  * Built-in message templates. Admins can override subject/body per type
  * (MessageTemplate table). Placeholders: {{name}}, {{company}}, {{order}}, etc.
@@ -190,16 +192,16 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", 
 /** Minimal, client-safe HTML email around a plain-text body. */
 export function emailHtml(subject: string, body: string, link?: string | null): string {
   const paragraphs = escapeHtml(body)
-    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#0f766a">$1</a>')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#132263">$1</a>')
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 16px">${p.replace(/\n/g, "<br>")}</p>`)
     .join("");
   const button = link
-    ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#0f766a;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600">Open in VITICO Wholesale</a></p>`
+    ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#132263;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600">Open in VITICO Wholesale</a></p>`
     : "";
   return `<!doctype html><html><body style="margin:0;background:#f5f6f7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#16191d">
 <div style="max-width:560px;margin:0 auto;padding:24px">
-<div style="font-weight:700;font-size:18px;color:#0d5f56;margin-bottom:16px">VITICO <span style="font-weight:400;color:#5d6670">Wholesale</span></div>
+<div style="margin-bottom:16px"><img src="${APP_URL}/brand/wordmark.png" alt="VITICO" width="112" height="36" style="display:block;border:0"></div>
 <div style="background:#fff;border:1px solid #e2e5e9;border-radius:8px;padding:24px">
 <h1 style="font-size:18px;margin:0 0 16px">${escapeHtml(subject)}</h1>${paragraphs}${button}
 </div>

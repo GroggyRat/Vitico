@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Wordmark } from "@/components/brand/logo";
 import { NavLink } from "@/components/layout/nav-link";
 import { UserMenu } from "@/components/layout/user-menu";
 import { requireStaff } from "@/lib/auth/guards";
@@ -34,8 +35,9 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     <div className="flex flex-1 flex-col md:flex-row">
       <aside className="border-b border-line bg-surface md:w-60 md:shrink-0 md:border-r md:border-b-0">
         <div className="px-5 py-4">
-          <Link href="/admin" className="text-lg font-bold tracking-tight text-brand-700">
-            VITICO <span className="font-normal text-ink-muted">Admin</span>
+          <Link href="/admin" className="flex items-end gap-2">
+            <Wordmark height={26} />
+            <span className="pb-0.5 text-sm text-ink-muted">Admin</span>
           </Link>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col">
