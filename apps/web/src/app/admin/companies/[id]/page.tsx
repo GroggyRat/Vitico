@@ -131,6 +131,24 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
           </CardBody>
         </Card>
 
+        {(company.odooPartnerId || company.odooSyncedAt) && (
+          <Card>
+            <CardHeader title="Odoo" />
+            <CardBody>
+              <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+                <dt className="text-ink-muted">Partner ID</dt>
+                <dd>{company.odooPartnerId ?? "—"}</dd>
+                <dt className="text-ink-muted">Balance owing</dt>
+                <dd>{formatFJD(company.odooReceivable)}</dd>
+                <dt className="text-ink-muted">Overdue</dt>
+                <dd className={Number(company.odooOverdue ?? 0) > 0 ? "font-medium text-red-600" : ""}>{formatFJD(company.odooOverdue)}</dd>
+                <dt className="text-ink-muted">Last synced</dt>
+                <dd>{formatDateTime(company.odooSyncedAt)}</dd>
+              </dl>
+            </CardBody>
+          </Card>
+        )}
+
         <Card>
           <CardHeader title="Users" />
           <Table>

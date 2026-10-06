@@ -7,9 +7,13 @@ import { processOutbox, requeueStuck } from "@/server/notifications/deliver";
 import { defaultProviders } from "@/server/notifications/providers";
 import { cleanupAuth, runScheduled } from "@/server/jobs";
 import { refreshExchangeRates } from "@/server/services/pricing-admin";
+import { createTransport, odooConfigFromEnv } from "@/server/odoo/client";
+import { processOdooTasks, pullAccounting } from "@/server/odoo/sync";
 
 const db = createDb();
 const providers = defaultProviders();
+const odooConfig = odooConfigFromEnv();
+const odoo = odooConfig ? createTransport(odooConfig) : null;
 const HOUR = 3_600_000;
 let stopping = false;
 
@@ -32,6 +36,12 @@ async function scheduleLoop() {
   while (!stopping) {
     const jobs: [string, number, () => Promise<unknown>][] = [
       ["requeue-stuck", 5 * 60_000, () => requeueStuck(db)],
+      ...(odoo
+        ? ([
+            ["odoo-push", 10_000, async () => { const n = await processOdooTasks(db, odoo); if (n) log(`odoo: processed ${n} task(s)`); }],
+            ["odoo-pull", 15 * 60_000, async () => log("odoo: pulled accounting", await pullAccounting(db, odoo))],
+          ] as [string, number, () => Promise<unknown>][])
+        : []),
       ["cleanup-auth", 24 * HOUR, async () => log("auth cleanup", await cleanupAuth(db))],
       ...(process.env.FX_AUTO_REFRESH === "1"
         ? ([["fx-refresh", 24 * HOUR, async () => log("fx refreshed", await refreshExchangeRates(db, null))]] as [string, number, () => Promise<unknown>][])
@@ -44,7 +54,7 @@ async function scheduleLoop() {
         log(`job ${name} failed`, e);
       }
     }
-    await new Promise((r) => setTimeout(r, 30_000));
+    await new Promise((r) => setTimeout(r, 10_000));
   }
 }
 
@@ -57,7 +67,7 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
 }
 
 async function main() {
-  log("started");
+  log(`started (odoo ${odoo ? `on: ${odooConfig!.url} / ${odooConfig!.db} via ${odooConfig!.protocol}` : "off"})`);
   await Promise.all([deliverLoop(), scheduleLoop()]);
   await db.$disconnect();
 }

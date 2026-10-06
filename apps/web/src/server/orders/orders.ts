@@ -17,22 +17,42 @@ import { companyScope } from "../services/companies";
 import { moveStock } from "../services/stock";
 import { type CartOwner, clearCart, getOrCreateCart, priceCart } from "./cart";
 import { companyUserIds, notify, ownersOf, staffForCompany, staffWith } from "../notifications/notify";
+import { enqueueOdoo } from "../odoo/sync";
 import { HOLDS_STOCK, canTransition, statusLabel } from "./status";
 
 type Tx = Prisma.TransactionClient;
 
 // ─── Credit ──────────────────────────────────────────────────────────────────
 
-/** Credit limit minus on-account orders not yet marked paid. Odoo balances replace this later. */
+/**
+ * Credit limit minus what's owed. Once the customer is linked to Odoo, "owed" is Odoo's
+ * receivable balance plus on-account orders Odoo hasn't invoiced yet; before that it's
+ * every on-account order not yet marked paid.
+ */
 export async function creditAvailable(db: Db | Tx, companyId: string) {
   const company = await db.company.findUniqueOrThrow({ where: { id: companyId } });
+  const fromOdoo = company.odooSyncedAt !== null;
   const open = await db.order.aggregate({
-    where: { companyId, paymentStatus: PaymentStatus.ON_ACCOUNT, status: { not: S.CANCELLED } },
+    where: {
+      companyId,
+      paymentStatus: PaymentStatus.ON_ACCOUNT,
+      status: { not: S.CANCELLED },
+      ...(fromOdoo && { odooInvoiced: false }),
+    },
     _sum: { total: true },
   });
   const limitCents = toCents(company.creditLimit);
-  const usedCents = toCents(open._sum.total ?? 0);
-  return { limitCents, usedCents, availableCents: limitCents - usedCents, termsDays: company.paymentTermsDays };
+  const openCents = toCents(open._sum.total ?? 0);
+  const usedCents = fromOdoo ? toCents(company.odooReceivable ?? 0) + openCents : openCents;
+  return {
+    limitCents,
+    usedCents,
+    availableCents: limitCents - usedCents,
+    termsDays: company.paymentTermsDays,
+    overdueCents: toCents(company.odooOverdue ?? 0),
+    source: fromOdoo ? ("odoo" as const) : ("portal" as const),
+    syncedAt: company.odooSyncedAt,
+  };
 }
 
 export const CUSTOMER_PAYMENT_METHODS: PaymentMethod[] = [
@@ -77,6 +97,11 @@ async function setStatus(tx: Tx, order: { id: string; status: OrderStatus }, to:
   const updated = await tx.order.update({ where: { id: order.id }, data: { ...data, status: to } });
   await event(tx, order.id, { type: "status", from: order.status, to, note, actorId });
   await notifyStatus(tx, updated, to, note);
+  // Odoo gets the sale order once VITICO confirms it; cancellations follow.
+  if (to === S.CONFIRMED && !updated.odooOrderId) await enqueueOdoo(tx, "ORDER_PUSH", order.id);
+  if (to === S.CANCELLED && (updated.odooOrderId || (await tx.odooSyncTask.count({ where: { kind: "ORDER_PUSH", entityId: order.id } })))) {
+    await enqueueOdoo(tx, "ORDER_CANCEL", order.id);
+  }
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────

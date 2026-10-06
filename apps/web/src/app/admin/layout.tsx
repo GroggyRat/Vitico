@@ -19,6 +19,7 @@ const nav: { href: string; label: string; capability: StaffCapability; exact?: b
   { href: "/admin/settings/tiers", label: "Tiers", capability: "settings.pricing" },
   { href: "/admin/settings/payments", label: "Payment details", capability: "settings.payments" },
   { href: "/admin/settings/messages", label: "Messages", capability: "settings.messages" },
+  { href: "/admin/integrations/odoo", label: "Odoo", capability: "integrations.manage" },
   { href: "/admin/audit", label: "Audit log", capability: "audit.view" },
 ];
 
