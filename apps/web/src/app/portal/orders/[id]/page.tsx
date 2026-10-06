@@ -47,7 +47,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/po
     <>
       <div className="mb-2 text-sm">
         <Link href="/portal/orders" className="text-ink-muted hover:text-ink">
-          ← Orders
+          Back to Orders
         </Link>
       </div>
       <PageHeader
@@ -69,8 +69,8 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/po
                 order.status === "PENDING_CUSTOMER_APPROVAL"
                   ? "Order placed. It's waiting for your account owner's approval."
                   : order.paymentMethod === "ON_ACCOUNT"
-                    ? "Thank you — your order has been sent to VITICO."
-                    : "Thank you — your order has been sent. Please pay using the details below so we can dispatch it.",
+                    ? "Thank you, your order has been sent to VITICO."
+                    : "Thank you, your order has been sent. Please pay using the details below so we can dispatch it.",
             }}
           />
         </div>

@@ -32,7 +32,7 @@ export function TierRowForm({ tierId, name, discountPercent, minAnnualSpend }: {
           min="0"
           step="1"
           defaultValue={minAnnualSpend}
-          placeholder="—"
+          placeholder="-"
           className="h-8 w-32 py-1"
         />
         <span className="text-sm text-ink-muted">/ year</span>

@@ -25,7 +25,7 @@ async function deliverLoop() {
     try {
       const n = await processOutbox(db, providers);
       if (n > 0) log(`delivered batch of ${n}`);
-      if (n === 25) continue; // more waiting — go again immediately
+      if (n === 25) continue; // more waiting, go again immediately
     } catch (e) {
       log("outbox error", e);
     }

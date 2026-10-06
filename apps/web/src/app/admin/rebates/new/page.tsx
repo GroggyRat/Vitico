@@ -15,7 +15,7 @@ export default async function NewRulePage() {
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/rebates" className="text-ink-muted hover:text-ink">
-          ← Rebates
+          Back to Rebates
         </Link>
       </div>
       <PageHeader title="New rebate programme" />

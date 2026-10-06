@@ -64,8 +64,8 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
         </Table>
       </Card>
       <div className="mt-4 flex justify-between text-sm">
-        {page > 1 ? <Link href={`/admin/audit?page=${page - 1}`} className="text-brand-700 hover:underline">← Newer</Link> : <span />}
-        {hasMore && <Link href={`/admin/audit?page=${page + 1}`} className="text-brand-700 hover:underline">Older →</Link>}
+        {page > 1 ? <Link href={`/admin/audit?page=${page - 1}`} className="text-brand-700 hover:underline">Newer entries</Link> : <span />}
+        {hasMore && <Link href={`/admin/audit?page=${page + 1}`} className="text-brand-700 hover:underline">Older entries</Link>}
       </div>
     </>
   );

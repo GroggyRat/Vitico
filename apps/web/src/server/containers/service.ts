@@ -194,7 +194,7 @@ export async function submitBuild(db: Db, access: BuildAccess, buildId: string, 
           regionId: build.destinationRegionId,
           delivery: {
             pickup: false,
-            address: build.address ?? { label: `${build.containerType.name} to ${build.destinationRegion.name}`, line1: `Port of discharge — ${build.destinationRegion.name}`, line2: null, city: build.destinationRegion.name },
+            address: build.address ?? { label: `${build.containerType.name} to ${build.destinationRegion.name}`, line1: `Port of discharge, ${build.destinationRegion.name}`, line2: null, city: build.destinationRegion.name },
             poNumber: build.poNumber,
             notes: [`Container: ${build.containerType.name} (${build.name})`, build.notes].filter(Boolean).join("\n"),
             requestedDate: build.requestedDate,

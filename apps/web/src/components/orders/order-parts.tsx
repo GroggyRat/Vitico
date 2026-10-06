@@ -42,7 +42,7 @@ export function OrderLines({ lines, showCalculated }: { lines: Line[]; showCalcu
               <Td className="text-right tabular-nums">{l.qty}</Td>
               {anyFulfilled && (
                 <Td className={l.qtyFulfilled !== null && l.qtyFulfilled < l.qty ? "text-right font-medium text-amber-700 tabular-nums" : "text-right tabular-nums"}>
-                  {l.qtyFulfilled ?? "—"}
+                  {l.qtyFulfilled ?? "-"}
                 </Td>
               )}
               <Td className="text-right tabular-nums">{formatFJD(l.unitPrice)}</Td>

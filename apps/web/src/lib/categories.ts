@@ -21,5 +21,5 @@ export async function getCategoryTree(opts: { activeOnly?: boolean } = {}): Prom
 }
 
 export async function getCategoryOptions() {
-  return (await getCategoryTree()).map((c) => ({ id: c.id, label: `${"— ".repeat(c.depth)}${c.name}` }));
+  return (await getCategoryTree()).map((c) => ({ id: c.id, label: `${"\u00a0\u00a0\u00a0".repeat(c.depth)}${c.name}` }));
 }

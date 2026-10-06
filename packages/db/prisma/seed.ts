@@ -1,6 +1,6 @@
 /**
  * Development seed: reference data (regions, tiers) plus realistic fake staff,
- * customer companies and users. Idempotent — safe to run repeatedly.
+ * customer companies and users. Idempotent, safe to run repeatedly.
  *
  * All seeded users share the password in SEED_PASSWORD (default below).
  */

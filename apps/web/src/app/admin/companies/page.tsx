@@ -87,7 +87,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/admin/
                 </Td>
                 <Td>{c.tier.name}</Td>
                 <Td>{c.region.name}</Td>
-                <Td>{c.salesRep?.name ?? <span className="text-ink-muted">—</span>}</Td>
+                <Td>{c.salesRep?.name ?? <span className="text-ink-muted">-</span>}</Td>
                 <Td className="text-right tabular-nums">{formatFJD(c.creditLimit)}</Td>
                 <Td className="text-right tabular-nums">{c._count.users}</Td>
               </tr>

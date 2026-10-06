@@ -51,7 +51,7 @@ export default async function CartPage() {
   const overLimit = user.orderLimit != null && user.companyRole === "PURCHASING" && priced.totalCents > Number(user.orderLimit) * 100;
   const creditHint =
     credit.limitCents <= 0
-      ? "Not available — ask VITICO about credit terms"
+      ? "Not available. Ask VITICO about credit terms"
       : `${formatCents(Math.max(0, credit.availableCents))} available of ${formatCents(credit.limitCents)} · Net ${credit.termsDays} days`;
   const methods = [
     { value: PaymentMethod.ON_ACCOUNT, label: paymentMethodLabel.ON_ACCOUNT, hint: creditHint, disabled: credit.limitCents <= 0 || priced.totalCents > credit.availableCents },
@@ -79,7 +79,7 @@ export default async function CartPage() {
             <CardBody>
               <DetailsForm
                 action={cartDetailsAction}
-                addresses={addresses.map((a) => ({ id: a.id, label: `${a.label} — ${a.city}, ${a.region.name}` }))}
+                addresses={addresses.map((a) => ({ id: a.id, label: `${a.label}, ${a.city}, ${a.region.name}` }))}
                 values={{
                   delivery: priced.cart.pickup ? "pickup" : (priced.cart.addressId ?? addresses[0]?.id ?? "pickup"),
                   poNumber: priced.cart.poNumber ?? "",

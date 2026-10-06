@@ -465,7 +465,7 @@ export async function dispatchOrder(db: Db, actor: StaffActor, orderId: string, 
       }
       await tx.orderLine.update({ where: { id: line.id }, data: { qtyFulfilled: sent } });
     }
-    if (short && order.lines.every((l) => (fulfilled[l.id] ?? l.qty) === 0)) throw new ServiceError("Nothing is being sent — cancel the order instead.");
+    if (short && order.lines.every((l) => (fulfilled[l.id] ?? l.qty) === 0)) throw new ServiceError("Nothing is being sent. Cancel the order instead.");
     await setStatus(tx, order, short ? S.PARTIALLY_FULFILLED : S.DISPATCHED, actor.id, note);
   });
 }

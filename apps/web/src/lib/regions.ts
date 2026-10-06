@@ -15,7 +15,7 @@ export async function getRegionOptions(): Promise<RegionOption[]> {
   for (const top of childrenOf.get(null) ?? []) {
     const kids = childrenOf.get(top.id) ?? [];
     if (kids.length === 0) out.push({ id: top.id, label: top.name });
-    for (const k of kids) out.push({ id: k.id, label: `${top.name} — ${k.name}` });
+    for (const k of kids) out.push({ id: k.id, label: `${top.name} / ${k.name}` });
   }
   return out;
 }

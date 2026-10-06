@@ -26,9 +26,9 @@ export function InviteForm() {
         </Field>
         <Field label="Role" htmlFor="invite-role" error={e.role}>
           <Select id="invite-role" name="role" value={role} onChange={(ev) => setRole(ev.target.value)}>
-            <option value="PURCHASING">Purchasing — places orders</option>
-            <option value="ACCOUNTS">Accounts — invoices &amp; payments</option>
-            <option value="OWNER">Owner — full access</option>
+            <option value="PURCHASING">Purchasing: places orders</option>
+            <option value="ACCOUNTS">Accounts: invoices &amp; payments</option>
+            <option value="OWNER">Owner: full access</option>
           </Select>
         </Field>
         {role === "PURCHASING" && (

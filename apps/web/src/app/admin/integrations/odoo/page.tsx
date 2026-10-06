@@ -13,7 +13,7 @@ import { pullNowAction, pushNowAction, retryFailedAction, syncAllCustomersAction
 
 export const metadata: Metadata = { title: "Odoo" };
 
-const kindLabel = { PARTNER_PUSH: "Customer → Odoo", ORDER_PUSH: "Order → Odoo", ORDER_CANCEL: "Cancel in Odoo" };
+const kindLabel = { PARTNER_PUSH: "Customer to Odoo", ORDER_PUSH: "Order to Odoo", ORDER_CANCEL: "Cancel in Odoo" };
 
 export default async function OdooPage() {
   await requireStaff("integrations.manage");

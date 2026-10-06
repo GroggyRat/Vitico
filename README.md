@@ -75,6 +75,9 @@ All seeded users have the password `Vitico!2026` (override with `SEED_PASSWORD`)
 - **Auth** is email + password (argon2) with database sessions in an HTTP-only cookie. Accounts lock
   for 15 minutes after 5 failed attempts. Invite and password-reset links are single-use and stored hashed.
 
+- **UI copy and styling**: plain and direct. No em dashes in any text, statuses are plain coloured
+  words (not pill badges), and products without a photo show an empty neutral box.
+
 - **Notifications** use a transactional outbox: services call `notify()` inside the same database
   transaction as the change, which writes in-app notifications and queues email / SMS / push rows.
   The worker (`apps/web/worker`) delivers them with retries, and can run as several copies safely.

@@ -39,8 +39,8 @@ export default async function StatementPage() {
         {[
           ["Balance owing", formatCents(credit.source === "odoo" ? credit.usedCents : credit.usedCents)],
           ["Overdue", formatCents(credit.overdueCents)],
-          ["Credit limit", credit.limitCents > 0 ? formatCents(credit.limitCents) : "—"],
-          ["Available credit", credit.limitCents > 0 ? formatCents(Math.max(0, credit.availableCents)) : "—"],
+          ["Credit limit", credit.limitCents > 0 ? formatCents(credit.limitCents) : "-"],
+          ["Available credit", credit.limitCents > 0 ? formatCents(Math.max(0, credit.availableCents)) : "-"],
         ].map(([k, v]) => (
           <Card key={k}>
             <CardBody>
@@ -78,7 +78,7 @@ export default async function StatementPage() {
                   </Td>
                   <Td className="text-ink-muted">{formatDate(i.invoiceDate)}</Td>
                   <Td className={overdue ? "font-medium text-red-600" : "text-ink-muted"}>{formatDate(i.dueDate)}</Td>
-                  <Td className="text-xs">{i.order?.number ?? i.origin ?? "—"}</Td>
+                  <Td className="text-xs">{i.order?.number ?? i.origin ?? "-"}</Td>
                   <Td className="text-right tabular-nums">{formatFJD(i.amountTotal)}</Td>
                   <Td className="text-right font-medium tabular-nums">{formatFJD(i.amountResidual)}</Td>
                   <Td>
@@ -113,8 +113,8 @@ export default async function StatementPage() {
             {payments.map((p) => (
               <tr key={p.id}>
                 <Td>{formatDate(p.date)}</Td>
-                <Td className="font-mono text-xs">{p.reference ?? "—"}</Td>
-                <Td>{p.journal ?? "—"}</Td>
+                <Td className="font-mono text-xs">{p.reference ?? "-"}</Td>
+                <Td>{p.journal ?? "-"}</Td>
                 <Td className="text-right tabular-nums">{formatFJD(p.amount)}</Td>
               </tr>
             ))}

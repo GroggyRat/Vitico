@@ -69,7 +69,7 @@ export default async function PriceCheckPage({ searchParams }: PageProps<"/admin
               <div>
                 <div className="text-xs text-ink-muted">Margin</div>
                 <div className={r.belowCost ? "font-medium text-red-600" : "font-medium"}>
-                  {Math.round((1 - Number(product.costPrice) * 100 / r.unitCents) * 1000) / 10}%{r.belowCost && " — below cost"}
+                  {Math.round((1 - Number(product.costPrice) * 100 / r.unitCents) * 1000) / 10}%{r.belowCost && ", below cost"}
                 </div>
               </div>
             )}
@@ -98,7 +98,7 @@ export default async function PriceCheckPage({ searchParams }: PageProps<"/admin
           {p.fccc && (
             <p className="text-sm text-ink-muted">
               FCCC {formatCents(p.fccc.fcccCents)} vs VITICO equivalent {formatCents(p.fccc.viticoCents)}
-              {p.fccc.exceeds ? <strong className="text-red-600"> — above FCCC price!</strong> : ` (saving ${p.fccc.savingPercent}%)`}
+              {p.fccc.exceeds ? <strong className="text-red-600">, above FCCC price</strong> : ` (saving ${p.fccc.savingPercent}%)`}
             </p>
           )}
         </div>

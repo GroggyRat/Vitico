@@ -143,7 +143,7 @@ export function ProductForm({
             <Field label="Base price (FJD, excl. VAT)" htmlFor="p-price" error={e.basePrice} hint="Per sell unit, before tier/contract pricing">
               <Input id="p-price" name="basePrice" type="number" min="0" step="0.01" defaultValue={values.basePrice} required />
             </Field>
-            <Field label="Cost price (FJD)" htmlFor="p-cost" error={e.costPrice} hint="Internal only — used for margin checks">
+            <Field label="Cost price (FJD)" htmlFor="p-cost" error={e.costPrice} hint="Internal only, used for margin checks">
               <Input id="p-cost" name="costPrice" type="number" min="0" step="0.01" defaultValue={values.costPrice} />
             </Field>
             <Field label="VAT" htmlFor="p-vat" error={e.vatCategory}>

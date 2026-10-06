@@ -19,7 +19,7 @@ export type TemplateDef = {
   mandatoryEmail?: boolean;
   subject: string;
   body: string;
-  /** Variables the template can use — shown in the admin editor. */
+  /** Variables the template can use, shown in the admin editor. */
   vars: string[];
 };
 
@@ -60,7 +60,7 @@ export const TEMPLATES = {
   "order.placed": {
     category: "orders",
     subject: "Order {{order}} received",
-    body: "Thanks — we've received order {{order}} ({{total}}). We'll let you know when it's confirmed.",
+    body: "Thanks, we've received order {{order}} ({{total}}). We'll let you know when it's confirmed.",
     vars: ["order", "total"],
   },
   "order.needs_approval": {
@@ -155,6 +155,6 @@ export function emailHtml(subject: string, body: string, link?: string | null): 
 <div style="background:#fff;border:1px solid #e2e5e9;border-radius:8px;padding:24px">
 <h1 style="font-size:18px;margin:0 0 16px">${escapeHtml(subject)}</h1>${paragraphs}${button}
 </div>
-<p style="font-size:12px;color:#5d6670;margin-top:16px">You can change which emails you get under Profile → Notifications.</p>
+<p style="font-size:12px;color:#5d6670;margin-top:16px">You can change which emails you get under Profile, Notifications.</p>
 </div></body></html>`;
 }

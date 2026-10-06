@@ -60,7 +60,7 @@ export default async function PortalDashboard() {
         {seesFinance && (
           <Stat
             label="Available credit"
-            value={credit.limitCents > 0 ? formatCents(Math.max(0, credit.availableCents)) : "—"}
+            value={credit.limitCents > 0 ? formatCents(Math.max(0, credit.availableCents)) : "-"}
             note={credit.limitCents > 0 ? `of ${formatFJD(company.creditLimit)} limit` : "No credit terms"}
           />
         )}
