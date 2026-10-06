@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-prod
+  group: deploy
   cancel-in-progress: false
 
 permissions:
@@ -23,7 +23,8 @@ jobs:
     if: vars.AWS_DEPLOY_ROLE_ARN != '' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    environment: prod
+    # Must match the Terraform `environment` (the AWS deploy role only trusts that GitHub environment).
+    environment: ${{ vars.DEPLOY_ENVIRONMENT || 'prod' }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       ECR_REPOSITORY_URL: ${{ vars.ECR_REPOSITORY_URL }}

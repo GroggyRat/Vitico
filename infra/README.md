@@ -36,11 +36,13 @@ Terraform for running VITICO Wholesale in AWS Sydney (`ap-southeast-2`, the near
    SNS SMS also has a low default monthly spend limit; raise it in the SNS console.
 6. Fill in the keys in the app secret (`app_secret_arn` output). Generate web push keys with
    `npx web-push generate-vapid-keys`. Leave a key empty to switch that integration off.
-7. In GitHub, create an environment called `prod` (add required reviewers if you want a manual
-   approval step), then set these **repository variables** from the Terraform outputs:
+7. In GitHub, create an environment with the same name as Terraform's `environment` (`prod` or
+   `staging`; add required reviewers if you want a manual approval step), then set these
+   **repository variables** from the Terraform outputs:
 
    | Variable | Output |
    | --- | --- |
+   | `DEPLOY_ENVIRONMENT` | the environment name, e.g. `staging` (defaults to `prod`) |
    | `AWS_REGION` | `ap-southeast-2` |
    | `AWS_DEPLOY_ROLE_ARN` | `deploy_role_arn` |
    | `ECR_REPOSITORY_URL` | `ecr_repository_url` |
