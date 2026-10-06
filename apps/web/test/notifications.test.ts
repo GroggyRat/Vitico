@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PaymentMethod } from "@vitico/db";
+import { APP_URL } from "@/lib/env";
 import { runScheduled } from "@/server/jobs";
 import { RETRY_DELAYS_MIN, processOutbox } from "@/server/notifications/deliver";
 import { notify } from "@/server/notifications/notify";
@@ -39,7 +40,7 @@ describe("notify", () => {
     expect(inApp[0].body).toContain("Bula Vikash, Bula Mart has been approved");
     const msgs = await outbox();
     expect(msgs.map((m) => m.channel)).toEqual(["EMAIL"]);
-    expect(msgs[0].link).toBe("http://localhost:3000/portal");
+    expect(msgs[0].link).toBe(`${APP_URL}/portal`);
   });
 
   it("follows preferences: SMS only with a valid phone, push per device", async () => {
@@ -65,7 +66,7 @@ describe("notify", () => {
     const msgs = await outbox();
     expect(msgs).toHaveLength(1);
     expect(msgs[0]).toMatchObject({ channel: "EMAIL", to: "losana@t.test", subject: "Join Bula Mart!" });
-    expect(msgs[0].body).toMatch(/^Hi Losana: http:\/\/localhost:3000\/set-password\/\S+$/);
+    expect(msgs[0].body.startsWith(`Hi Losana: ${APP_URL}/set-password/`)).toBe(true);
     expect(await db.notification.count({ where: { userId: user.id } })).toBe(0);
   });
 
