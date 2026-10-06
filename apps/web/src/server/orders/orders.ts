@@ -16,7 +16,8 @@ import { ServiceError } from "../errors";
 import { companyScope } from "../services/companies";
 import { moveStock } from "../services/stock";
 import { type CartOwner, clearCart, getOrCreateCart, priceCart } from "./cart";
-import { HOLDS_STOCK, canTransition } from "./status";
+import { companyUserIds, notify, ownersOf, staffForCompany, staffWith } from "../notifications/notify";
+import { HOLDS_STOCK, canTransition, statusLabel } from "./status";
 
 type Tx = Prisma.TransactionClient;
 
@@ -73,9 +74,65 @@ async function releaseStock(tx: Tx, order: { id: string; lines: { productId: str
 
 async function setStatus(tx: Tx, order: { id: string; status: OrderStatus }, to: OrderStatus, actorId: string | null, note?: string | null, data: Prisma.OrderUpdateInput = {}) {
   if (!canTransition(order.status, to)) throw new ServiceError(`Can't move an order from ${order.status} to ${to}.`);
-  await tx.order.update({ where: { id: order.id }, data: { ...data, status: to } });
+  const updated = await tx.order.update({ where: { id: order.id }, data: { ...data, status: to } });
   await event(tx, order.id, { type: "status", from: order.status, to, note, actorId });
+  await notifyStatus(tx, updated, to, note);
 }
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+type OrderRef = { id: string; number: string; companyId: string; placedById: string; total: Prisma.Decimal };
+
+const money = (v: Prisma.Decimal | number) => `FJD ${Number(v).toFixed(2)}`;
+
+/** The customer users who hear about an order: its owners, plus the placer if they're a customer user. */
+async function customerRecipients(tx: Tx, order: OrderRef) {
+  const owners = await ownersOf(tx, order.companyId);
+  const placer = await tx.user.findUnique({ where: { id: order.placedById }, select: { companyId: true } });
+  return placer?.companyId === order.companyId ? [...owners, order.placedById] : owners;
+}
+
+const CUSTOMER_VISIBLE: OrderStatus[] = [S.CONFIRMED, S.READY, S.ON_HOLD, S.DISPATCHED, S.PARTIALLY_FULFILLED, S.COMPLETED];
+
+async function notifyStatus(tx: Tx, order: OrderRef, to: OrderStatus, note?: string | null) {
+  const link = `/portal/orders/${order.id}`;
+  if (to === S.CANCELLED) {
+    await notify(tx, { type: "order.cancelled", userIds: await customerRecipients(tx, order), vars: { order: order.number, reason: note ?? "" }, link });
+  } else if (CUSTOMER_VISIBLE.includes(to)) {
+    await notify(tx, {
+      type: "order.status",
+      userIds: await customerRecipients(tx, order),
+      vars: { order: order.number, status: statusLabel[to].toLowerCase(), note: note ? ` ${note}` : "" },
+      link,
+    });
+  }
+}
+
+/** Tell the right staff once an order is ready for VITICO to act on. */
+async function notifyStaffNewOrder(tx: Tx, order: OrderRef) {
+  const company = await tx.company.findUniqueOrThrow({ where: { id: order.companyId }, select: { name: true } });
+  await notify(tx, {
+    type: "staff.order_new",
+    userIds: await staffForCompany(tx, "orders.manage", order.companyId),
+    vars: { order: order.number, company: company.name, total: money(order.total) },
+    link: `/admin/orders/${order.id}`,
+  });
+}
+
+async function notifyPriceApproval(tx: Tx, order: OrderRef) {
+  const [company, placer] = await Promise.all([
+    tx.company.findUniqueOrThrow({ where: { id: order.companyId }, select: { name: true } }),
+    tx.user.findUniqueOrThrow({ where: { id: order.placedById }, select: { name: true } }),
+  ]);
+  await notify(tx, {
+    type: "staff.price_approval",
+    userIds: (await staffWith(tx, "prices.approve")).filter((id) => id !== order.placedById),
+    vars: { order: order.number, company: company.name, placedBy: placer.name },
+    link: `/admin/orders/${order.id}`,
+  });
+}
+
+const companyUserIdsWithFinance = (tx: Tx, companyId: string) => companyUserIds(tx, companyId, [CompanyRole.ACCOUNTS]);
 
 // ─── Placing an order ────────────────────────────────────────────────────────
 
@@ -195,6 +252,21 @@ export async function placeOrder(db: Db, owner: CartOwner, placer: Placer, payme
         actorId,
       });
       await clearCart(tx, cart.id);
+
+      const link = `/portal/orders/${order.id}`;
+      if (status === S.PENDING_CUSTOMER_APPROVAL) {
+        const placer = await tx.user.findUniqueOrThrow({ where: { id: actorId }, select: { name: true } });
+        await notify(tx, {
+          type: "order.needs_approval",
+          userIds: await ownersOf(tx, company.id),
+          vars: { order: order.number, total: money(order.total), placedBy: placer.name },
+          link,
+        });
+      } else {
+        await notify(tx, { type: "order.placed", userIds: await customerRecipients(tx, order), vars: { order: order.number, total: money(order.total) }, link });
+      }
+      if (status === S.PENDING_PRICE_APPROVAL) await notifyPriceApproval(tx, order);
+      if (status === S.SUBMITTED) await notifyStaffNewOrder(tx, order);
       return order;
     },
     { timeout: 30_000 },
@@ -216,6 +288,8 @@ export async function approveOrderAsCustomer(db: Db, actor: CustomerActor, order
       customerApprovedAt: new Date(),
       ...(to === S.SUBMITTED && { submittedAt: new Date() }),
     });
+    if (to === S.SUBMITTED) await notifyStaffNewOrder(tx, order);
+    else await notifyPriceApproval(tx, order);
   });
 }
 
@@ -230,6 +304,7 @@ export async function approveOrderPrices(db: Db, actor: StaffActor, orderId: str
       priceApprovedAt: new Date(),
       submittedAt: new Date(),
     });
+    await notifyStaffNewOrder(tx, order);
   });
 }
 
@@ -322,6 +397,13 @@ export async function submitPayment(
     });
     await tx.order.update({ where: { id: orderId }, data: { paymentStatus: PaymentStatus.PENDING_VERIFICATION } });
     await event(tx, orderId, { type: "payment_submitted", note: `${paymentMethodLabel[input.method]} ${input.amount.toFixed(2)} ref ${input.reference}`, actorId: actor.id });
+    const company = await tx.company.findUniqueOrThrow({ where: { id: order.companyId }, select: { name: true } });
+    await notify(tx, {
+      type: "staff.payment_submitted",
+      userIds: await staffWith(tx, "payments.verify"),
+      vars: { order: order.number, company: company.name, method: paymentMethodLabel[input.method], amount: money(input.amount), reference: input.reference },
+      link: `/admin/orders/${order.id}`,
+    });
     return payment;
   });
 }
@@ -348,6 +430,13 @@ export async function reviewPayment(db: Db, actor: StaffActor, paymentId: string
       type: verdict.verified ? "payment_verified" : "payment_rejected",
       note: verdict.verified ? `${payment.amount.toFixed(2)} ref ${payment.reference}` : verdict.reason,
       actorId: actor.id,
+    });
+    const recipients = [...(await customerRecipients(tx, order)), ...(await companyUserIdsWithFinance(tx, order.companyId))];
+    await notify(tx, {
+      type: verdict.verified ? "payment.verified" : "payment.rejected",
+      userIds: recipients,
+      vars: { order: order.number, amount: money(payment.amount), reason: verdict.verified ? "" : verdict.reason },
+      link: `/portal/orders/${order.id}`,
     });
   });
 }

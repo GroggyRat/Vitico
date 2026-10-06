@@ -17,14 +17,16 @@ export function qtyProblem(p: { moq: number; orderMultiple: number; sellUnit: st
 }
 
 export async function getOrCreateCart(db: Tx, owner: CartOwner) {
-  const existing = await db.cart.findUnique({ where: { userId_companyId: { userId: owner.userId, companyId: owner.companyId } } });
+  const where = { userId_companyId: { userId: owner.userId, companyId: owner.companyId } };
+  const existing = await db.cart.findUnique({ where });
   if (existing) return existing;
   const address = await db.address.findFirst({ where: { companyId: owner.companyId, isDefault: true } });
-  return db.cart.upsert({
-    where: { userId_companyId: { userId: owner.userId, companyId: owner.companyId } },
-    update: {},
-    create: { userId: owner.userId, companyId: owner.companyId, addressId: address?.id ?? null },
-  });
+  // ON CONFLICT DO NOTHING keeps concurrent first requests (e.g. two tabs) from colliding.
+  await db.$executeRaw`
+    INSERT INTO "Cart" (id, "userId", "companyId", "addressId", "updatedAt")
+    VALUES (${`cart_${owner.userId}_${owner.companyId}`.slice(0, 190)}, ${owner.userId}, ${owner.companyId}, ${address?.id ?? null}, now())
+    ON CONFLICT ("userId", "companyId") DO NOTHING`;
+  return db.cart.findUniqueOrThrow({ where });
 }
 
 async function orderableProduct(db: Tx, productId: string) {

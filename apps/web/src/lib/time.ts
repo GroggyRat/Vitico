@@ -44,3 +44,8 @@ export function toBusinessInput(d: Date | null, dateOnly = false): string {
   const iso = local.toISOString();
   return dateOnly ? iso.slice(0, 10) : iso.slice(0, 16);
 }
+
+/** The instant `days` days before now. */
+export function daysAgo(days: number): Date {
+  return new Date(Date.now() - days * 86_400_000);
+}

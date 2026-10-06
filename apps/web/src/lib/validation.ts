@@ -351,3 +351,31 @@ export const paymentSettingsSchema = z.object({
   mycashNumber: z.string().trim().max(30).default(""),
   note: z.string().trim().max(1000).default(""),
 });
+
+// ─── Profile & notifications ─────────────────────────────────────────────────
+
+export const profileSchema = z.object({
+  name: trimmed().min(2, { error: "Enter your name." }).max(100),
+  phone: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/[\s()-]/g, ""))
+    .refine((v) => v === "" || /^\+\d{7,15}$/.test(v), { error: "Use international format, e.g. +679 123 4567." })
+    .transform((v) => v || null),
+});
+
+export const changePasswordSchema = z
+  .object({ currentPassword: z.string().min(1, { error: "Enter your current password." }), password: passwordSchema, confirmPassword: z.string() })
+  .refine((d) => d.password === d.confirmPassword, { error: "Passwords don't match.", path: ["confirmPassword"] });
+
+export const forgotPasswordSchema = z.object({ email: emailSchema });
+
+export const templateSchema = z.object({
+  subject: trimmed().min(2).max(200),
+  body: trimmed().min(2).max(5000),
+});
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({ p256dh: z.string().min(10).max(500), auth: z.string().min(5).max(500) }),
+});

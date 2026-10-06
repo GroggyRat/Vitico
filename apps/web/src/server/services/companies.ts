@@ -4,6 +4,7 @@ import type { ApproveCompanyInput, UpdateCompanyInput } from "@/lib/validation";
 import type { StaffActor } from "../actors";
 import { audit } from "../audit";
 import { ServiceError } from "../errors";
+import { notify, ownersOf } from "../notifications/notify";
 
 /** Restricts company queries to what this staff member may see. */
 export function companyScope(actor: StaffActor): Prisma.CompanyWhereInput {
@@ -70,6 +71,8 @@ export async function approveCompany(db: Db, actor: StaffActor, companyId: strin
       entityId: companyId,
       data: { ...input },
     });
+    const company = await tx.company.findUniqueOrThrow({ where: { id: companyId } });
+    await notify(tx, { type: "account.approved", userIds: await ownersOf(tx, companyId), vars: { company: company.name }, link: "/portal" });
   });
 }
 
@@ -82,6 +85,8 @@ export async function rejectCompany(db: Db, actor: StaffActor, companyId: string
     });
     if (count === 0) throw new ServiceError("This application is no longer pending.");
     await tx.user.updateMany({ where: { companyId }, data: { status: UserStatus.DISABLED } });
+    const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, include: { users: { where: { companyRole: "OWNER" } } } });
+    await notify(tx, { type: "account.rejected", userIds: company.users.map((u) => u.id), vars: { company: company.name, reason } });
     await tx.session.deleteMany({ where: { user: { companyId } } });
     await audit(tx, { actorId: actor.id, action: "company.rejected", entityType: "Company", entityId: companyId, data: { reason } });
   });

@@ -61,19 +61,22 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  sessions          Session[]
-  authTokens        AuthToken[]
-  assignedCompanies Company[]       @relation("SalesRepCompanies")
-  approvedCompanies Company[]       @relation("CompanyApprover")
-  auditLogs         AuditLog[]
-  stockMovements    StockMovement[]
-  carts             Cart[]
-  ordersPlaced      Order[]         @relation("OrdersPlaced")
-  ordersApproved    Order[]         @relation("OrdersApproved")
-  pricesApproved    Order[]         @relation("OrderPricesApproved")
-  orderEvents       OrderEvent[]
-  paymentsSubmitted Payment[]       @relation("PaymentsSubmitted")
-  paymentsVerified  Payment[]       @relation("PaymentsVerified")
+  sessions                Session[]
+  authTokens              AuthToken[]
+  assignedCompanies       Company[]                @relation("SalesRepCompanies")
+  approvedCompanies       Company[]                @relation("CompanyApprover")
+  auditLogs               AuditLog[]
+  stockMovements          StockMovement[]
+  carts                   Cart[]
+  ordersPlaced            Order[]                  @relation("OrdersPlaced")
+  ordersApproved          Order[]                  @relation("OrdersApproved")
+  pricesApproved          Order[]                  @relation("OrderPricesApproved")
+  orderEvents             OrderEvent[]
+  paymentsSubmitted       Payment[]                @relation("PaymentsSubmitted")
+  paymentsVerified        Payment[]                @relation("PaymentsVerified")
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  pushSubscriptions       PushSubscription[]
 
   @@index([companyId])
 }
@@ -710,4 +713,89 @@ model Payment {
   createdAt     DateTime            @default(now())
 
   @@index([status])
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+/// In-app notification (the bell). Email / SMS / push copies go through OutboundMessage.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+/// Per-user channel choices for a category of notification (orders, payments, account, …).
+model NotificationPreference {
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category String
+  email    Boolean @default(true)
+  sms      Boolean @default(false)
+  push     Boolean @default(true)
+
+  @@id([userId, category])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum MessageChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum MessageStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+/// Transactional outbox: rows are written in the same transaction as the change
+/// that caused them, then delivered by the worker with retries.
+model OutboundMessage {
+  id        String         @id @default(cuid())
+  channel   MessageChannel
+  /// Email address, E.164 phone number, or push subscription id.
+  to        String
+  subject   String?
+  body      String
+  link      String?
+  type      String
+  userId    String?
+  status    MessageStatus  @default(PENDING)
+  attempts  Int            @default(0)
+  lastError String?
+  sendAfter DateTime       @default(now())
+  sentAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  @@index([status, sendAfter])
+}
+
+/// Admin overrides of the built-in message templates.
+model MessageTemplate {
+  type      String   @id
+  subject   String
+  body      String
+  updatedAt DateTime @updatedAt
 }
