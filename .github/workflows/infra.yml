@@ -1,0 +1,97 @@
+name: Infrastructure
+
+# Runs Terraform for one environment, so AWS can be set up without a local machine.
+# Needs repository secrets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (an admin key used only
+# for this) and infra/terraform/envs/<environment>.tfvars. State goes in an S3 bucket named
+# vitico-tfstate-<account id>, created on the first run.
+#
+#   start  creates the certificate and email identity and prints the DNS records to add
+#   plan   shows what apply would change
+#   apply  creates or updates everything (waits for the certificate's DNS record)
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [plan, start, apply]
+        default: plan
+      environment:
+        type: string
+        default: staging
+
+concurrency:
+  group: infra-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ap-southeast-2
+      AWS_DEFAULT_REGION: ap-southeast-2
+      VAR_FILE: envs/${{ inputs.environment }}.tfvars
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.12.2
+          terraform_wrapper: false
+
+      - name: State bucket
+        run: |
+          test -f "$VAR_FILE" || { echo "::error::$VAR_FILE is missing"; exit 1; }
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="vitico-tfstate-$ACCOUNT"
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            aws s3api create-bucket --bucket "$BUCKET" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+            aws s3api put-bucket-versioning --bucket "$BUCKET" --versioning-configuration Status=Enabled
+            aws s3api put-public-access-block --bucket "$BUCKET" --public-access-block-configuration \
+              BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          fi
+          echo "BUCKET=$BUCKET" >> "$GITHUB_ENV"
+
+      - name: Init
+        run: |
+          terraform init -input=false -backend-config="bucket=$BUCKET" \
+            -backend-config="key=${{ inputs.environment }}/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" -backend-config="use_lockfile=true"
+
+      - name: Plan
+        if: inputs.action == 'plan'
+        run: terraform plan -input=false -no-color -var-file="$VAR_FILE"
+
+      - name: Start (certificate and email identity)
+        if: inputs.action == 'start'
+        run: |
+          terraform apply -input=false -no-color -auto-approve -var-file="$VAR_FILE" \
+            -target='aws_acm_certificate.app' -target='aws_sesv2_email_identity.domain'
+          echo "Add these DNS records at your domain's DNS provider:"
+          terraform show -json | jq -r '
+            .values.root_module.resources[]
+            | if .address == "aws_acm_certificate.app[0]" then
+                (.values.domain_validation_options[] | "\(.resource_record_name)  CNAME  \(.resource_record_value)   (certificate)")
+              elif .address == "aws_sesv2_email_identity.domain" then
+                (.values.email_identity as $d | .values.dkim_signing_attributes[0].tokens[] | "\(.)._domainkey.\($d).  CNAME  \(.).dkim.amazonses.com   (email)")
+              else empty end' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply
+        if: inputs.action == 'apply'
+        run: |
+          terraform apply -input=false -no-color -auto-approve -var-file="$VAR_FILE"
+          {
+            echo '### Outputs'
+            echo '```'
+            terraform output -no-color
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          terraform output -no-color

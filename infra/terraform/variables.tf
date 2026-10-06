@@ -21,8 +21,9 @@ variable "domain_name" {
 }
 
 variable "certificate_arn" {
-  description = "ACM certificate for domain_name in var.region, used by the load balancer."
+  description = "ACM certificate for domain_name in var.region, used by the load balancer. Leave empty to have Terraform request one (add the DNS record from the dns_records output to validate it)."
   type        = string
+  default     = ""
 }
 
 variable "cloudfront_certificate_arn" {

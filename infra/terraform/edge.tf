@@ -1,3 +1,28 @@
+# ─── Certificate ─────────────────────────────────────────────────────────────
+# Requested here unless one is passed in. Validation waits until the CNAME from the
+# dns_records output exists at the domain's DNS provider.
+
+resource "aws_acm_certificate" "app" {
+  count             = var.certificate_arn == "" ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_acm_certificate_validation" "app" {
+  count           = var.certificate_arn == "" ? 1 : 0
+  certificate_arn = aws_acm_certificate.app[0].arn
+  timeouts {
+    create = "90m"
+  }
+}
+
+locals {
+  certificate_arn = var.certificate_arn != "" ? var.certificate_arn : aws_acm_certificate_validation.app[0].certificate_arn
+}
+
 # ─── Load balancer ───────────────────────────────────────────────────────────
 
 resource "aws_lb" "main" {
@@ -44,7 +69,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.certificate_arn
+  certificate_arn   = local.certificate_arn
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.web.arn

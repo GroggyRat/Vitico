@@ -45,3 +45,12 @@ output "app_secret_arn" {
 output "uploads_bucket" {
   value = aws_s3_bucket.uploads.bucket
 }
+
+output "dns_records" {
+  description = "Records to add at the domain's DNS provider."
+  value = concat(
+    [for o in flatten(aws_acm_certificate.app[*].domain_validation_options) : "${o.resource_record_name} ${o.resource_record_type} ${o.resource_record_value}  (certificate)"],
+    [for t in aws_sesv2_email_identity.domain.dkim_signing_attributes[0].tokens : "${t}._domainkey.${var.email_domain}. CNAME ${t}.dkim.amazonses.com  (email)"],
+    var.route53_zone_id == "" ? ["${var.domain_name}. CNAME ${local.cdn ? one(aws_cloudfront_distribution.main[*].domain_name) : aws_lb.main.dns_name}  (the app)"] : [],
+  )
+}
