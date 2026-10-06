@@ -47,7 +47,7 @@ test("order → pay → verify → fulfil → dispatch", async ({ page }) => {
   await logout(page);
 
   await login(page, "owner@labasafamily.test");
-  await page.getByRole("link", { name: "Orders" }).click();
+  await page.getByRole("link", { name: "Orders", exact: true }).click();
   await expect(page.getByRole("row", { name: new RegExp(number) }).getByText("Dispatched")).toBeVisible();
 });
 
@@ -64,7 +64,7 @@ test("purchasing user over their limit needs the owner's approval", async ({ pag
   await logout(page);
 
   await login(page, "owner@bulamart.test");
-  await page.getByRole("link", { name: "Orders" }).click();
+  await page.getByRole("link", { name: "Orders", exact: true }).click();
   await page.getByRole("link", { name: /VIT-/ }).first().click();
   await expect(page.getByText("This order needs your approval")).toBeVisible();
   await page.getByRole("button", { name: "Approve order" }).click();
@@ -90,7 +90,7 @@ test("a sales rep orders with a manual price; a pricing manager approves it", as
   await logout(page);
 
   await login(page, "pricing@vitico.test");
-  await page.getByRole("link", { name: "Price approvals" }).click();
+  await page.getByRole("link", { name: "Price approvals", exact: true }).click();
   await expect(page.getByText("Matching competitor quote")).toBeVisible();
   await page.getByRole("link", { name: number }).click();
   await page.getByRole("button", { name: "Approve prices" }).click();

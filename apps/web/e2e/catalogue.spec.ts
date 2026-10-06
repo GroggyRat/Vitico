@@ -30,7 +30,7 @@ test("admin adds a product and receives stock; customers can find it", async ({ 
   await logout(page);
 
   await login(page, "owner@bulamart.test");
-  await page.getByRole("link", { name: "Products" }).click();
+  await page.getByRole("link", { name: "Products", exact: true }).click();
   await page.getByLabel("Search products").fill("kava");
   await page.getByRole("button", { name: "Search" }).click();
   await page.getByRole("link", { name: /Kava Powder/ }).click();
