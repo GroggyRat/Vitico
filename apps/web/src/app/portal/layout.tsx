@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Wordmark } from "@/components/brand/logo";
 import { NavLink } from "@/components/layout/nav-link";
 import { UserMenu } from "@/components/layout/user-menu";
 import { requireCustomer } from "@/lib/auth/guards";
@@ -15,16 +16,17 @@ export default async function PortalLayout({ children }: LayoutProps<"/portal">)
     <div className="flex flex-1 flex-col">
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 pt-3">
-          <Link href="/portal" className="text-lg font-bold tracking-tight text-brand-700">
-            VITICO <span className="font-normal text-ink-muted">Wholesale</span>
+          <Link href="/portal" className="flex items-end gap-2">
+            <Wordmark height={28} />
+            <span className="hidden pb-0.5 text-sm text-ink-muted sm:inline">Wholesale</span>
           </Link>
           <div className="flex items-center gap-3">
             {canOrder && (
               <Link href="/portal/cart" className="relative rounded-md border border-line px-3 py-1.5 text-sm font-medium hover:bg-canvas">
                 Cart
                 {cartCount > 0 && (
-                  <span className="ml-1.5 rounded-full bg-brand-600 px-1.5 py-0.5 text-xs text-white" aria-label={`${cartCount} items`}>
-                    {cartCount}
+                  <span className="ml-1 tabular-nums text-ink-muted" aria-label={`${cartCount} items`}>
+                    ({cartCount})
                   </span>
                 )}
               </Link>

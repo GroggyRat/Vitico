@@ -7,11 +7,11 @@ export const metadata: Metadata = {
   description: "Wholesale ordering for VITICO customers across Fiji and the Pacific.",
   applicationName: "VITICO Wholesale",
   appleWebApp: { capable: true, title: "VITICO", statusBarStyle: "default" },
-  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f766a",
+  themeColor: "#132263",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
