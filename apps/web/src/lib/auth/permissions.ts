@@ -22,6 +22,8 @@ export const staffCapabilities = {
   "settings.messages": ["SUPER_ADMIN", "ADMIN"],
   "integrations.manage": ["SUPER_ADMIN", "ADMIN", "ACCOUNTS"],
   "rebates.manage": ["SUPER_ADMIN", "PRICING_MANAGER", "ACCOUNTS"],
+  "deals.manage": ["SUPER_ADMIN", "ADMIN", "PRICING_MANAGER"],
+  "reports.view": ["SUPER_ADMIN", "ADMIN", "PRICING_MANAGER", "SALES_REP", "ACCOUNTS"],
 } satisfies Record<string, StaffRole[]>;
 
 export type StaffCapability = keyof typeof staffCapabilities;

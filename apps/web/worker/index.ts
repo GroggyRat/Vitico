@@ -7,6 +7,7 @@ import { processOutbox, requeueStuck } from "@/server/notifications/deliver";
 import { defaultProviders } from "@/server/notifications/providers";
 import { cleanupAuth, runScheduled } from "@/server/jobs";
 import { expireAndWarn, settlePeriods } from "@/server/rebates/service";
+import { runDealJobs } from "@/server/deals/service";
 import { refreshExchangeRates } from "@/server/services/pricing-admin";
 import { createTransport, odooConfigFromEnv } from "@/server/odoo/client";
 import { processOdooTasks, pullAccounting } from "@/server/odoo/sync";
@@ -46,6 +47,7 @@ async function scheduleLoop() {
       ["cleanup-auth", 24 * HOUR, async () => log("auth cleanup", await cleanupAuth(db))],
       ["rebate-settle", 6 * HOUR, async () => log(`rebates: ${await settlePeriods(db)} period credit(s)`)],
       ["rebate-expire", 24 * HOUR, async () => log(`rebates: ${await expireAndWarn(db)} expired`)],
+      ["deal-drops", 5 * 60_000, async () => log("deals", await runDealJobs(db))],
       ...(process.env.FX_AUTO_REFRESH === "1"
         ? ([["fx-refresh", 24 * HOUR, async () => log("fx refreshed", await refreshExchangeRates(db, null))]] as [string, number, () => Promise<unknown>][])
         : []),

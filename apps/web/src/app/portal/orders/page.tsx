@@ -22,7 +22,15 @@ export default async function OrdersPage() {
   const waiting = orders.filter((o) => o.status === "PENDING_CUSTOMER_APPROVAL");
   return (
     <>
-      <PageHeader title="Orders" description={waiting.length ? `${waiting.length} order(s) waiting for your approval` : undefined} />
+      <PageHeader
+        title="Orders"
+        description={waiting.length ? `${waiting.length} order(s) waiting for your approval` : undefined}
+        actions={
+          <a href="/portal/orders/export" download className="text-sm text-brand-700 hover:underline">
+            Download CSV
+          </a>
+        }
+      />
       <Card>
         <Table>
           <thead>

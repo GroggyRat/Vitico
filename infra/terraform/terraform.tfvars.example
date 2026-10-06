@@ -1,0 +1,10 @@
+environment       = "prod"
+domain_name       = "order.vitico.com.fj"
+certificate_arn   = "arn:aws:acm:ap-southeast-2:111111111111:certificate/..."
+# Optional: a us-east-1 certificate for the same name puts CloudFront in front.
+cloudfront_certificate_arn = ""
+route53_zone_id   = ""
+email_domain      = "vitico.com.fj"
+email_from        = "VITICO Wholesale <orders@vitico.com.fj>"
+alarm_email       = "it@vitico.com.fj"
+github_repository = "GroggyRat/Vitico"

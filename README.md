@@ -8,6 +8,8 @@ The product spec lives in [`docs/SPEC.md`](docs/SPEC.md).
 ```
 apps/web        Next.js app: customer portal (/portal), admin (/admin), auth pages
 packages/db     Prisma schema, migrations, seed data, shared DB client
+packages/pricing  Pricing engine (pure functions, 100% test coverage)
+infra/          AWS infrastructure (Terraform) and deployment notes
 docs/           Specification
 ```
 
@@ -62,6 +64,13 @@ All seeded users have the password `Vitico!2026` (override with `SEED_PASSWORD`)
 | `pnpm db:migrate` | Create a migration after editing `schema.prisma` |
 | `pnpm db:deploy` | Apply migrations |
 | `pnpm db:seed` | Seed development data (refuses to run in production) |
+| `pnpm --filter @vitico/db bootstrap` | Production setup: reference data and the first admin (see `infra/README.md`) |
+| `docker build .` | The production image (web, worker and migrations) |
+
+## Deployment
+
+AWS (ECS Fargate, RDS Postgres, S3, SES, SNS, CloudFront) through Terraform in `infra/terraform`,
+deployed by `.github/workflows/deploy.yml` once CI passes on `main`. See [`infra/README.md`](infra/README.md).
 
 ## How the code is organised
 

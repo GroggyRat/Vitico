@@ -76,7 +76,7 @@ export default async function CataloguePage({ searchParams }: PageProps<"/portal
             href={href({ category: c.slug, page: "" })}
             aria-current={category === c.slug ? "page" : undefined}
             className={cn(
-              "rounded-full border px-3 py-1 text-sm",
+              "rounded-md border px-3 py-1 text-sm",
               category === c.slug ? "border-brand-600 bg-brand-600 text-white" : "border-line bg-surface text-ink-muted hover:text-ink",
             )}
           >
