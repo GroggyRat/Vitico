@@ -4,6 +4,7 @@ import type { AddressInput } from "@/lib/validation";
 import type { CustomerActor } from "../actors";
 import { audit } from "../audit";
 import { ServiceError } from "../errors";
+import { enqueueOdoo } from "../odoo/sync";
 
 function assertCanManage(actor: CustomerActor) {
   if (!companyCan(actor.companyRole, "team.manage")) throw new ServiceError("Only owners can manage addresses.");
@@ -35,6 +36,7 @@ export async function setDefaultAddress(db: Db, actor: CustomerActor, addressId:
     if (!address) throw new ServiceError("Address not found.");
     await tx.address.updateMany({ where: { companyId: actor.companyId, isDefault: true }, data: { isDefault: false } });
     await tx.address.update({ where: { id: address.id }, data: { isDefault: true } });
+    await enqueueOdoo(tx, "PARTNER_PUSH", actor.companyId);
   });
 }
 

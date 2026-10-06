@@ -15,7 +15,7 @@ import {
   tierUpdateSchema,
   updateCompanySchema,
 } from "@/lib/validation";
-import { approveCompany, rejectCompany, setCompanySuspended, updateCompany } from "@/server/services/companies";
+import { approveCompany, changeTier, rejectCompany, setCompanySuspended, updateCompany } from "@/server/services/companies";
 import { updateRegion, updateTier } from "@/server/services/settings";
 import { createPasswordResetLink, inviteStaff, resendStaffInvite, updateStaff } from "@/server/services/users";
 
@@ -145,4 +145,16 @@ export async function updateTierAction(tierId: string, _: ActionState, formData:
   } catch (e) {
     return serviceErrorState(e);
   }
+}
+
+export async function changeTierAction(companyId: string, tierId: string, _: ActionState): Promise<ActionState> {
+  const { actor } = await requireStaff("companies.edit");
+  try {
+    await changeTier(getDb(), actor, companyId, tierId);
+  } catch (e) {
+    return serviceErrorState(e);
+  }
+  revalidatePath("/admin/settings/tiers");
+  revalidatePath(`/admin/companies/${companyId}`);
+  return { ok: true };
 }

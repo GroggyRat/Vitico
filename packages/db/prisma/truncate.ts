@@ -1,5 +1,9 @@
 /** Empties every table (keeps the schema). Used to reset test databases. */
+import path from "node:path";
+import { config } from "dotenv";
 import { createDb } from "../src/index";
+
+config({ path: path.resolve(import.meta.dirname, "../../../.env"), quiet: true });
 
 if (process.env.NODE_ENV === "production") throw new Error("Refusing to truncate in production.");
 

@@ -61,11 +61,24 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  sessions          Session[]
-  authTokens        AuthToken[]
-  assignedCompanies Company[]   @relation("SalesRepCompanies")
-  approvedCompanies Company[]   @relation("CompanyApprover")
-  auditLogs         AuditLog[]
+  sessions                Session[]
+  authTokens              AuthToken[]
+  assignedCompanies       Company[]                @relation("SalesRepCompanies")
+  approvedCompanies       Company[]                @relation("CompanyApprover")
+  auditLogs               AuditLog[]
+  stockMovements          StockMovement[]
+  carts                   Cart[]
+  ordersPlaced            Order[]                  @relation("OrdersPlaced")
+  ordersApproved          Order[]                  @relation("OrdersApproved")
+  pricesApproved          Order[]                  @relation("OrderPricesApproved")
+  orderEvents             OrderEvent[]
+  paymentsSubmitted       Payment[]                @relation("PaymentsSubmitted")
+  paymentsVerified        Payment[]                @relation("PaymentsVerified")
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  pushSubscriptions       PushSubscription[]
+  containerBuilds         ContainerBuild[]
+  dealReservations        DealReservation[]
 
   @@index([companyId])
 }
@@ -135,7 +148,11 @@ model Company {
   salesRep   User?   @relation("SalesRepCompanies", fields: [salesRepId], references: [id])
 
   /// res.partner id in Odoo once synced.
-  odooPartnerId Int? @unique
+  odooPartnerId  Int?      @unique
+  /// Accounting figures from Odoo (Odoo is the source of truth for balances).
+  odooReceivable Decimal?  @db.Decimal(12, 2)
+  odooOverdue    Decimal?  @db.Decimal(12, 2)
+  odooSyncedAt   DateTime?
 
   applicationNotes String?
   rejectionReason  String?
@@ -145,26 +162,39 @@ model Company {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  users     User[]    @relation("CompanyUsers")
-  addresses Address[]
+  users            User[]            @relation("CompanyUsers")
+  addresses        Address[]
+  contractPrices   ContractPrice[]
+  carts            Cart[]
+  savedLists       SavedList[]
+  orders           Order[]
+  odooInvoices     OdooInvoice[]
+  odooPayments     OdooPayment[]
+  rebateRules      RebateRule[]
+  rebateCredits    RebateCredit[]
+  rebateUsages     RebateUsage[]
+  containerBuilds  ContainerBuild[]
+  dealReservations DealReservation[]
 
   @@index([status])
   @@index([salesRepId])
 }
 
 model Address {
-  id        String   @id @default(cuid())
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  label     String
-  line1     String
-  line2     String?
-  city      String
-  regionId  String
-  region    Region   @relation(fields: [regionId], references: [id])
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String           @id @default(cuid())
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  label           String
+  line1           String
+  line2           String?
+  city            String
+  regionId        String
+  region          Region           @relation(fields: [regionId], references: [id])
+  isDefault       Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  carts           Cart[]
+  containerBuilds ContainerBuild[]
 
   @@index([companyId])
 }
@@ -196,19 +226,26 @@ model Region {
   active      Boolean    @default(true)
   sortOrder   Int        @default(0)
 
-  companies Company[]
-  addresses Address[]
+  companies       Company[]
+  addresses       Address[]
+  contractPrices  ContractPrice[]
+  fcccPrices      FcccPrice[]
+  orders          Order[]
+  containerBuilds ContainerBuild[]
 }
 
 model Tier {
-  id              String  @id @default(cuid())
-  code            String  @unique
+  id              String   @id @default(cuid())
+  code            String   @unique
   name            String
   /// Default tier-wide discount off base price; product-level tier prices override it.
-  discountPercent Decimal @default(0) @db.Decimal(5, 2)
-  sortOrder       Int     @default(0)
+  discountPercent Decimal  @default(0) @db.Decimal(5, 2)
+  /// Trailing 12-month spend (FJD excl. VAT) at which customers are suggested for this tier.
+  minAnnualSpend  Decimal? @db.Decimal(12, 2)
+  sortOrder       Int      @default(0)
 
-  companies Company[]
+  companies  Company[]
+  tierPrices TierPrice[]
 }
 
 // ─── Audit ───────────────────────────────────────────────────────────────────
@@ -225,4 +262,938 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+// ─── Catalogue ───────────────────────────────────────────────────────────────
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  sortOrder Int        @default(0)
+  active    Boolean    @default(true)
+
+  products Product[]
+}
+
+enum VatCategory {
+  /// 15% Fiji VAT on domestic sales (zero-rated for export regions).
+  STANDARD
+  /// Zero-rated basic items (e.g. some staples) — 0% even domestically.
+  ZERO_RATED
+  EXEMPT
+}
+
+/// A sellable item. Quantities and prices are per *sell unit* (usually a carton).
+model Product {
+  id                String      @id @default(cuid())
+  sku               String      @unique
+  barcode           String?
+  name              String
+  brand             String?
+  description       String?
+  categoryId        String
+  category          Category    @relation(fields: [categoryId], references: [id])
+  /// What one sell unit is, e.g. "Carton of 24 × 400g".
+  sellUnit          String      @default("Carton")
+  unitsPerCarton    Int         @default(1)
+  /// Minimum sell units per order line.
+  moq               Int         @default(1)
+  /// Quantities must be a multiple of this.
+  orderMultiple     Int         @default(1)
+  cartonCbm         Decimal     @default(0) @db.Decimal(10, 4)
+  cartonWeightKg    Decimal     @default(0) @db.Decimal(10, 3)
+  /// FJD per sell unit, excluding VAT.
+  basePrice         Decimal     @db.Decimal(12, 2)
+  /// Landed cost per sell unit; used for margin checks. Never shown to customers.
+  costPrice         Decimal?    @db.Decimal(12, 2)
+  vatCategory       VatCategory @default(STANDARD)
+  imageUrl          String?
+  tags              String[]    @default([])
+  active            Boolean     @default(true)
+  /// Can be shipped in a dry container (false for chilled/frozen or hazardous lines).
+  containerEligible Boolean     @default(true)
+  /// Available below this many sell units shows as "low stock".
+  lowStockThreshold Int         @default(10)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  stock          StockLevel?
+  movements      StockMovement[]
+  contractPrices ContractPrice[]
+  tierPrices     TierPrice[]
+  quantityBreaks QuantityBreak[]
+  promotions     PromotionProduct[]
+  fcccPrices     FcccPrice[]
+  cartItems      CartItem[]
+  savedListItems SavedListItem[]
+  orderLines     OrderLine[]
+  containerLines ContainerBuildLine[]
+  dealItems      DealDropItem[]
+
+  @@index([categoryId])
+  @@index([active])
+}
+
+// ─── Stock ───────────────────────────────────────────────────────────────────
+
+/// Current stock for a product, in sell units. available = onHand − reserved − allocated.
+/// Always change it through the stock service, which locks the row and writes a movement.
+model StockLevel {
+  productId String   @id
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  onHand    Int      @default(0)
+  /// Held for submitted, not-yet-dispatched orders.
+  reserved  Int      @default(0)
+  /// Held for Deal Drops and confirmed containers.
+  allocated Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+enum StockMovementType {
+  RECEIPT
+  ADJUSTMENT
+  RESERVE
+  RELEASE
+  DISPATCH
+  ALLOCATE
+  DEALLOCATE
+}
+
+/// Immutable stock ledger.
+model StockMovement {
+  id             String            @id @default(cuid())
+  productId      String
+  product        Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type           StockMovementType
+  onHandDelta    Int               @default(0)
+  reservedDelta  Int               @default(0)
+  allocatedDelta Int               @default(0)
+  /// Balances after this movement, for easy auditing.
+  onHandAfter    Int
+  reservedAfter  Int
+  allocatedAfter Int
+  reason         String?
+  /// What caused it, e.g. ("Order", id).
+  refType        String?
+  refId          String?
+  actorId        String?
+  actor          User?             @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+
+  @@index([productId, createdAt])
+  @@index([refType, refId])
+}
+
+// ─── Pricing ─────────────────────────────────────────────────────────────────
+
+enum AdjustmentKind {
+  PERCENT_OFF
+  FIXED_PRICE
+}
+
+/// Negotiated price for one customer and product (SPEC §5.1).
+model ContractPrice {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price       Decimal   @db.Decimal(12, 2)
+  /// Only when delivering to this region (or its children). Region-specific prices skip the region uplift.
+  regionId    String?
+  region      Region?   @relation(fields: [regionId], references: [id])
+  minQty      Int       @default(1)
+  validFrom   DateTime?
+  validTo     DateTime?
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([companyId, productId])
+}
+
+/// Per-product price for a tier, overriding the tier's default discount.
+model TierPrice {
+  tierId    String
+  tier      Tier    @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price     Decimal @db.Decimal(12, 2)
+
+  @@id([tierId, productId])
+}
+
+model QuantityBreak {
+  id        String         @id @default(cuid())
+  productId String
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  minQty    Int
+  kind      AdjustmentKind
+  /// Percent off base, or the fixed FJD unit price.
+  value     Decimal        @db.Decimal(12, 2)
+
+  @@unique([productId, minQty])
+}
+
+model Promotion {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  kind        AdjustmentKind
+  value       Decimal        @db.Decimal(12, 2)
+  minQty      Int            @default(1)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  active      Boolean        @default(true)
+  /// Empty = every tier / region.
+  tierIds     String[]       @default([])
+  regionIds   String[]       @default([])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  products PromotionProduct[]
+}
+
+model PromotionProduct {
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, productId])
+  @@index([productId])
+}
+
+enum FcccBasis {
+  PER_ITEM
+  PER_SELL_UNIT
+}
+
+/// FCCC controlled / reference price for a product (SPEC §6).
+model FcccPrice {
+  id            String    @id @default(cuid())
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Null = applies across Fiji.
+  regionId      String?
+  region        Region?   @relation(fields: [regionId], references: [id])
+  price         Decimal   @db.Decimal(12, 2)
+  basis         FcccBasis @default(PER_ITEM)
+  vatInclusive  Boolean   @default(true)
+  effectiveFrom DateTime
+  expiresAt     DateTime?
+  /// Gazette / order reference.
+  reference     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([productId])
+}
+
+/// Indicative FX for showing export customers local-currency prices. Billing is always FJD.
+model ExchangeRate {
+  currency  String   @id @db.Char(3)
+  /// Units of `currency` per 1 FJD.
+  perFjd    Decimal  @db.Decimal(18, 6)
+  source    String
+  updatedAt DateTime @updatedAt
+}
+
+/// Small key/value store for admin-editable settings (e.g. pricing priority).
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Carts & saved lists ─────────────────────────────────────────────────────
+
+/// One cart per (user, company). Sales reps get a separate cart per customer they order for.
+model Cart {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId     String
+  company       Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Null = pickup.
+  addressId     String?
+  address       Address?   @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  pickup        Boolean    @default(false)
+  poNumber      String?
+  notes         String?
+  requestedDate DateTime?
+  updatedAt     DateTime   @updatedAt
+  items         CartItem[]
+
+  @@unique([userId, companyId])
+}
+
+model CartItem {
+  id             String   @id @default(cuid())
+  cartId         String
+  cart           Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty            Int
+  /// Staff-only manual price; needs pricing approval when the order is placed.
+  overridePrice  Decimal? @db.Decimal(12, 2)
+  overrideReason String?
+  createdAt      DateTime @default(now())
+
+  @@unique([cartId, productId])
+}
+
+model SavedList {
+  id          String          @id @default(cuid())
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  createdById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  items       SavedListItem[]
+
+  @@unique([companyId, name])
+}
+
+model SavedListItem {
+  listId    String
+  list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty       Int
+
+  @@id([listId, productId])
+}
+
+// ─── Orders ──────────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  DRAFT
+  PENDING_CUSTOMER_APPROVAL
+  PENDING_PRICE_APPROVAL
+  SUBMITTED
+  CONFIRMED
+  PROCESSING
+  READY
+  ON_HOLD
+  DISPATCHED
+  PARTIALLY_FULFILLED
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderType {
+  STANDARD
+  CONTAINER
+  DEAL
+}
+
+enum PaymentMethod {
+  ON_ACCOUNT
+  BANK_DEPOSIT
+  MPAISA
+  MYCASH
+  REBATE_WALLET
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING_VERIFICATION
+  PAID
+  /// Invoiced on the customer's credit account.
+  ON_ACCOUNT
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  /// Human-friendly, e.g. VIT-001001.
+  number     String      @unique @default(dbgenerated("('VIT-'::text || lpad((nextval('order_number_seq'::regclass))::text, 6, '0'::text))"))
+  type       OrderType   @default(STANDARD)
+  status     OrderStatus
+  companyId  String
+  company    Company     @relation(fields: [companyId], references: [id])
+  placedById String
+  placedBy   User        @relation("OrdersPlaced", fields: [placedById], references: [id])
+  /// Set when a sales rep / admin placed it for the customer.
+  onBehalf   Boolean     @default(false)
+
+  pickup        Boolean   @default(false)
+  regionId      String
+  region        Region    @relation(fields: [regionId], references: [id])
+  /// Delivery address snapshot (null for pickup).
+  deliveryLabel String?
+  deliveryLine1 String?
+  deliveryLine2 String?
+  deliveryCity  String?
+  poNumber      String?
+  notes         String?
+  requestedDate DateTime?
+
+  isExport Boolean @default(false)
+  subtotal Decimal @db.Decimal(12, 2)
+  vatTotal Decimal @db.Decimal(12, 2)
+  total    Decimal @db.Decimal(12, 2)
+
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(UNPAID)
+
+  customerApprovedById String?
+  customerApprovedBy   User?     @relation("OrdersApproved", fields: [customerApprovedById], references: [id])
+  customerApprovedAt   DateTime?
+  priceApprovedById    String?
+  priceApprovedBy      User?     @relation("OrderPricesApproved", fields: [priceApprovedById], references: [id])
+  priceApprovedAt      DateTime?
+  cancelReason         String?
+
+  odooOrderId   Int?      @unique
+  /// Odoo sale order reference, e.g. S00042.
+  odooOrderName String?
+  /// Set once an Odoo invoice for this order is seen (then Odoo's balance covers it).
+  odooInvoiced  Boolean   @default(false)
+  submittedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  /// Container orders: the box used and the composition totals at submission.
+  containerTypeId   String?
+  containerType     ContainerType?  @relation(fields: [containerTypeId], references: [id])
+  containerCbm      Decimal?        @db.Decimal(10, 3)
+  containerWeightKg Decimal?        @db.Decimal(12, 1)
+  containerBuild    ContainerBuild? @relation("ContainerBuildOrder")
+
+  /// Deal Drop bond already paid, deducted from what's left to pay.
+  bondApplied     Decimal          @default(0) @db.Decimal(12, 2)
+  dealReservation DealReservation?
+
+  /// Rebate wallet value applied to this order (reduces what's left to pay).
+  rebateApplied Decimal   @default(0) @db.Decimal(12, 2)
+  paidAt        DateTime?
+  completedAt   DateTime?
+
+  lines         OrderLine[]
+  events        OrderEvent[]
+  payments      Payment[]
+  odooInvoices  OdooInvoice[]
+  rebateCredits RebateCredit[]
+  rebateUsages  RebateUsage[]
+
+  @@index([companyId, createdAt])
+  @@index([status])
+}
+
+model OrderLine {
+  id                  String   @id @default(cuid())
+  orderId             String
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id])
+  sku                 String
+  name                String
+  sellUnit            String
+  qty                 Int
+  qtyFulfilled        Int?
+  /// What the customer pays per unit (FJD excl. VAT).
+  unitPrice           Decimal  @db.Decimal(12, 2)
+  /// Product base price at order time, for "you saved" figures.
+  baseUnitPrice       Decimal? @db.Decimal(12, 2)
+  /// What the pricing engine said; differs from unitPrice only for approved overrides.
+  calculatedUnitPrice Decimal  @db.Decimal(12, 2)
+  priceSource         String
+  priceLabel          String
+  overrideReason      String?
+  vatPercent          Decimal  @db.Decimal(5, 2)
+  lineNet             Decimal  @db.Decimal(12, 2)
+  lineVat             Decimal  @db.Decimal(12, 2)
+  cartonCbm           Decimal  @db.Decimal(10, 4)
+  cartonWeightKg      Decimal  @db.Decimal(10, 3)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+/// Order timeline (status changes, approvals, notes).
+model OrderEvent {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type       String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus?
+  note       String?
+  actorId    String?
+  actor      User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime     @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model Payment {
+  id            String              @id @default(cuid())
+  orderId       String
+  order         Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method        PaymentMethod
+  amount        Decimal             @db.Decimal(12, 2)
+  /// Bank / M-Paisa / MyCash transaction reference.
+  reference     String
+  /// Storage key of an uploaded proof (receipt photo / PDF).
+  proofKey      String?
+  status        PaymentRecordStatus @default(PENDING)
+  submittedById String?
+  submittedBy   User?               @relation("PaymentsSubmitted", fields: [submittedById], references: [id], onDelete: SetNull)
+  verifiedById  String?
+  verifiedBy    User?               @relation("PaymentsVerified", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime            @default(now())
+
+  @@index([status])
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+/// In-app notification (the bell). Email / SMS / push copies go through OutboundMessage.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+/// Per-user channel choices for a category of notification (orders, payments, account, …).
+model NotificationPreference {
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category String
+  email    Boolean @default(true)
+  sms      Boolean @default(false)
+  push     Boolean @default(true)
+
+  @@id([userId, category])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum MessageChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum MessageStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+/// Transactional outbox: rows are written in the same transaction as the change
+/// that caused them, then delivered by the worker with retries.
+model OutboundMessage {
+  id        String         @id @default(cuid())
+  channel   MessageChannel
+  /// Email address, E.164 phone number, or push subscription id.
+  to        String
+  subject   String?
+  body      String
+  link      String?
+  type      String
+  userId    String?
+  status    MessageStatus  @default(PENDING)
+  attempts  Int            @default(0)
+  lastError String?
+  sendAfter DateTime       @default(now())
+  sentAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  @@index([status, sendAfter])
+}
+
+/// Admin overrides of the built-in message templates.
+model MessageTemplate {
+  type      String   @id
+  subject   String
+  body      String
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Odoo integration ────────────────────────────────────────────────────────
+
+enum OdooTaskKind {
+  PARTNER_PUSH
+  ORDER_PUSH
+  ORDER_CANCEL
+}
+
+enum OdooTaskStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+/// Queue of changes to send to Odoo, written in the same transaction as the change.
+model OdooSyncTask {
+  id        String         @id @default(cuid())
+  kind      OdooTaskKind
+  entityId  String
+  status    OdooTaskStatus @default(PENDING)
+  attempts  Int            @default(0)
+  lastError String?
+  runAfter  DateTime       @default(now())
+  createdAt DateTime       @default(now())
+  doneAt    DateTime?
+
+  @@index([status, runAfter])
+  @@index([kind, entityId])
+}
+
+enum OdooMoveType {
+  INVOICE
+  CREDIT_NOTE
+}
+
+/// Customer invoices and credit notes pulled from Odoo (account.move).
+model OdooInvoice {
+  id             String       @id @default(cuid())
+  odooId         Int          @unique
+  companyId      String
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  number         String
+  moveType       OdooMoveType
+  invoiceDate    DateTime?
+  dueDate        DateTime?
+  amountTotal    Decimal      @db.Decimal(12, 2)
+  amountResidual Decimal      @db.Decimal(12, 2)
+  /// Odoo payment_state: not_paid, in_payment, paid, partial, reversed…
+  paymentState   String
+  /// invoice_origin, e.g. "S00042" or our VIT number.
+  origin         String?
+  orderId        String?
+  order          Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  /// Odoo customer-portal path with access token (for the PDF).
+  portalPath     String?
+  syncedAt       DateTime     @default(now())
+
+  @@index([companyId, invoiceDate])
+}
+
+/// Customer payments pulled from Odoo (account.payment).
+model OdooPayment {
+  id        String   @id @default(cuid())
+  odooId    Int      @unique
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  date      DateTime
+  amount    Decimal  @db.Decimal(12, 2)
+  reference String?
+  journal   String?
+  syncedAt  DateTime @default(now())
+
+  @@index([companyId, date])
+}
+
+// ─── Rebates (SPEC §10) ──────────────────────────────────────────────────────
+
+enum RebateType {
+  /// Spend ≥ threshold in a period → earn % of that period's spend (stepped).
+  SPEND_TARGET
+  /// Earn % on eligible lines when the order completes and is paid.
+  CASHBACK
+  /// Earn % when an order/invoice is paid within N days.
+  EARLY_PAYMENT
+  /// Per-customer % of spend over a contract period, settled at period end after admin review.
+  CONTRACT
+}
+
+enum RebatePeriod {
+  MONTH
+  QUARTER
+  YEAR
+}
+
+model RebateRule {
+  id               String        @id @default(cuid())
+  name             String
+  description      String?
+  type             RebateType
+  active           Boolean       @default(true)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  /// Empty = every tier.
+  tierIds          String[]      @default([])
+  /// CONTRACT rules (and optional for others): only this customer.
+  companyId        String?
+  company          Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  period           RebatePeriod?
+  /// SPEND_TARGET steps: [{ "threshold": 10000, "percent": 1 }, …], ascending.
+  steps            Json?
+  /// CASHBACK / EARLY_PAYMENT / CONTRACT rate.
+  percent          Decimal?      @db.Decimal(5, 2)
+  /// CASHBACK eligibility; empty = all products.
+  categoryIds      String[]      @default([])
+  skus             String[]      @default([])
+  /// EARLY_PAYMENT window.
+  earlyPaymentDays Int?
+  /// Earned credit expires this many days after it becomes available. Null = never.
+  expiryDays       Int?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  credits RebateCredit[]
+}
+
+enum RebateCreditStatus {
+  PENDING
+  AVAILABLE
+  EXPIRED
+  CANCELLED
+}
+
+/// A lot of rebate value earned by a customer. Spending reduces `remaining` (soonest-expiring first).
+model RebateCredit {
+  id          String             @id @default(cuid())
+  companyId   String
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ruleId      String?
+  rule        RebateRule?        @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  orderId     String?
+  order       Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  /// Spend-target / contract period, e.g. "2026-Q3". Unique per rule & customer.
+  periodKey   String?
+  description String
+  amount      Decimal            @db.Decimal(12, 2)
+  remaining   Decimal            @db.Decimal(12, 2)
+  status      RebateCreditStatus
+  earnedAt    DateTime           @default(now())
+  availableAt DateTime?
+  expiresAt   DateTime?
+  actorId     String?
+  createdAt   DateTime           @default(now())
+
+  usages RebateUsageLine[]
+
+  @@unique([ruleId, companyId, periodKey])
+  @@unique([ruleId, orderId])
+  @@index([companyId, status])
+}
+
+/// Rebate value spent (on an order or a Deal Drop bond) or removed by an admin.
+model RebateUsage {
+  id          String            @id @default(cuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orderId     String?
+  order       Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  amount      Decimal           @db.Decimal(12, 2)
+  description String
+  actorId     String?
+  createdAt   DateTime          @default(now())
+  lines       RebateUsageLine[]
+
+  @@index([companyId, createdAt])
+}
+
+model RebateUsageLine {
+  usageId  String
+  usage    RebateUsage  @relation(fields: [usageId], references: [id], onDelete: Cascade)
+  creditId String
+  credit   RebateCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  amount   Decimal      @db.Decimal(12, 2)
+
+  @@id([usageId, creditId])
+}
+
+// ─── Containers (SPEC §11) ───────────────────────────────────────────────────
+
+model ContainerType {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  /// Usable volume and payload (not the box's theoretical maximum).
+  maxCbm           Decimal  @db.Decimal(8, 2)
+  maxWeightKg      Decimal  @db.Decimal(10, 1)
+  active           Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  /// Destinations this container can go to. Empty = anywhere.
+  allowedRegionIds String[] @default([])
+
+  builds ContainerBuild[]
+  orders Order[]
+}
+
+enum ContainerBuildStatus {
+  DRAFT
+  SUBMITTED
+}
+
+/// A container being filled by a customer (or a rep for them). Submitting turns it into an order.
+model ContainerBuild {
+  id                  String               @id @default(cuid())
+  companyId           String
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById         String
+  createdBy           User                 @relation(fields: [createdById], references: [id])
+  name                String
+  containerTypeId     String
+  containerType       ContainerType        @relation(fields: [containerTypeId], references: [id])
+  destinationRegionId String
+  destinationRegion   Region               @relation(fields: [destinationRegionId], references: [id])
+  /// Customer address at the destination (optional; otherwise "to port").
+  addressId           String?
+  address             Address?             @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  poNumber            String?
+  notes               String?
+  requestedDate       DateTime?
+  status              ContainerBuildStatus @default(DRAFT)
+  orderId             String?              @unique
+  order               Order?               @relation("ContainerBuildOrder", fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  lines               ContainerBuildLine[]
+
+  @@index([companyId, status])
+}
+
+model ContainerBuildLine {
+  buildId        String
+  build          ContainerBuild @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty            Int
+  overridePrice  Decimal?       @db.Decimal(12, 2)
+  overrideReason String?
+  createdAt      DateTime       @default(now())
+
+  @@id([buildId, productId])
+}
+
+// ─── Deal Drops (SPEC §12) ───────────────────────────────────────────────────
+
+enum DealState {
+  DRAFT
+  /// Stock allocated; live between startsAt and endsAt.
+  PUBLISHED
+  /// Ended and unsold stock released.
+  CLOSED
+  CANCELLED
+}
+
+model DealDrop {
+  id               String    @id @default(cuid())
+  name             String
+  description      String?
+  imageUrl         String?
+  state            DealState @default(DRAFT)
+  /// Price of one deal unit (one of each item × its qty), FJD excl. VAT.
+  dealPrice        Decimal   @db.Decimal(12, 2)
+  /// Deal units available in total and per customer.
+  totalUnits       Int
+  maxPerCustomer   Int
+  bondPercent      Decimal   @default(10) @db.Decimal(5, 2)
+  /// Days a customer has after securing to complete the purchase.
+  completionDays   Int       @default(7)
+  startsAt         DateTime
+  endsAt           DateTime
+  /// Empty = everyone.
+  tierIds          String[]  @default([])
+  regionIds        String[]  @default([])
+  companyIds       String[]  @default([])
+  publishedAt      DateTime?
+  closedAt         DateTime?
+  /// Deal units whose stock is currently allocated to this deal.
+  unitsAllocated   Int       @default(0)
+  /// Notification bookkeeping.
+  liveSentAt       DateTime?
+  /// Notification bookkeeping.
+  endingSoonSentAt DateTime?
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  items        DealDropItem[]
+  reservations DealReservation[]
+
+  @@index([state, startsAt, endsAt])
+}
+
+model DealDropItem {
+  dealId     String
+  deal       DealDrop @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  /// Sell units of this product in one deal unit.
+  qtyPerDeal Int
+
+  @@id([dealId, productId])
+}
+
+enum ReservationStatus {
+  /// Bond paid by bank/M-PAiSA/MyCash and waiting to be verified.
+  PENDING_BOND
+  SECURED
+  COMPLETED
+  /// Customer didn't complete in time (or backed out): bond kept.
+  FORFEITED
+  /// Never secured (bond rejected) or deal cancelled by VITICO: bond refunded if paid.
+  RELEASED
+}
+
+model DealReservation {
+  id               String            @id @default(cuid())
+  dealId           String
+  deal             DealDrop          @relation(fields: [dealId], references: [id])
+  companyId        String
+  company          Company           @relation(fields: [companyId], references: [id])
+  userId           String
+  user             User              @relation(fields: [userId], references: [id])
+  units            Int
+  /// Deal value at securing (incl. VAT) and the bond on it.
+  valueTotal       Decimal           @db.Decimal(12, 2)
+  bondAmount       Decimal           @db.Decimal(12, 2)
+  bondMethod       PaymentMethod
+  bondReference    String?
+  bondProofKey     String?
+  bondPaidAt       DateTime?
+  bondVerifiedById String?
+  status           ReservationStatus
+  completeBy       DateTime?
+  reminderSentAt   DateTime?
+  orderId          String?           @unique
+  order            Order?            @relation(fields: [orderId], references: [id])
+  note             String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([dealId, status])
+  @@index([companyId, status])
 }

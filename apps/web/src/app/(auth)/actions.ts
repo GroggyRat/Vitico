@@ -4,10 +4,10 @@ import { redirect } from "next/navigation";
 import { type ActionState, formToObject, serviceErrorState, validationError } from "@/lib/actions";
 import { endSession, startSession } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
-import { acceptInviteSchema, loginSchema, signupSchema } from "@/lib/validation";
+import { acceptInviteSchema, forgotPasswordSchema, loginSchema, signupSchema } from "@/lib/validation";
 import { LOCKOUT_MINUTES, authenticate } from "@/server/services/auth";
 import { applyForAccount } from "@/server/services/signup";
-import { redeemToken } from "@/server/services/users";
+import { redeemToken, requestPasswordReset } from "@/server/services/users";
 
 const loginMessages = {
   invalid: "Incorrect email or password.",
@@ -59,4 +59,12 @@ export async function setPasswordAction(token: string, _: ActionState, formData:
   }
   await startSession(userId);
   redirect("/");
+}
+
+export async function forgotPasswordAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = forgotPasswordSchema.safeParse(formToObject(formData));
+  if (!parsed.success) return validationError(parsed.error);
+  await requestPasswordReset(getDb(), parsed.data.email);
+  // Same answer whether or not the account exists.
+  return { ok: true, message: "If that email has an account, we've sent a link to reset the password. Check your inbox (and spam)." };
 }

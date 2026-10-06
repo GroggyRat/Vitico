@@ -4,7 +4,14 @@ import { PageHeader } from "@/components/ui/page-header";
 import { requireCustomer } from "@/lib/auth/guards";
 import { companyCan } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
-import { formatFJD } from "@/lib/format";
+import Link from "next/link";
+import { OrderStatusBadge } from "@/components/orders/order-parts";
+import { formatCents, formatDate, formatFJD } from "@/lib/format";
+import { creditAvailable } from "@/server/orders/orders";
+import { TargetProgress } from "@/components/rebates/target-progress";
+import { spendTargetProgress, totalSavings, walletBalance } from "@/server/rebates/service";
+import { liveDealsFor } from "@/server/deals/service";
+import { Countdown } from "@/components/deals/countdown";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -32,6 +39,14 @@ export default async function PortalDashboard() {
     },
   });
   const address = company.addresses[0];
+  const [credit, recent, wallet, targets, savings, deals] = await Promise.all([
+    creditAvailable(getDb(), company.id),
+    getDb().order.findMany({ where: { companyId: company.id }, orderBy: { createdAt: "desc" }, take: 5 }),
+    walletBalance(getDb(), company.id),
+    spendTargetProgress(getDb(), company),
+    totalSavings(getDb(), company.id),
+    liveDealsFor(getDb(), company),
+  ]);
   const seesFinance = companyCan(actor.companyRole, "finance.view");
 
   return (
@@ -45,11 +60,99 @@ export default async function PortalDashboard() {
           value={company.region.name}
           note={company.region.isExport ? `Export · prices shown in FJD and ${company.region.currency}` : "Domestic · prices exclude 15% VAT"}
         />
-        {seesFinance && <Stat label="Credit limit" value={formatFJD(company.creditLimit)} note="Live balance arrives with the Odoo integration" />}
+        {seesFinance && (
+          <Stat
+            label="Available credit"
+            value={credit.limitCents > 0 ? formatCents(Math.max(0, credit.availableCents)) : "-"}
+            note={credit.limitCents > 0 ? `of ${formatFJD(company.creditLimit)} limit` : "No credit terms"}
+          />
+        )}
         {seesFinance && (
           <Stat label="Payment terms" value={company.paymentTermsDays ? `${company.paymentTermsDays} days` : "Pay before dispatch"} />
         )}
       </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Link href="/portal/rebates" className="block">
+          <Stat
+            label="Rebate wallet"
+            value={formatCents(wallet.availableCents)}
+            note={wallet.pendingCents > 0 ? `+ ${formatCents(wallet.pendingCents)} pending` : "Use it at checkout"}
+          />
+        </Link>
+        <Stat
+          label="You've saved with VITICO"
+          value={formatCents(savings.discountCents + savings.rebateCents)}
+          note={`${formatCents(savings.discountCents)} off list prices · ${formatCents(savings.rebateCents)} in rebates`}
+        />
+      </div>
+
+      {targets.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader title="Volume rebate progress" />
+          <CardBody>
+            <TargetProgress items={targets} />
+          </CardBody>
+        </Card>
+      )}
+
+      <Card className="mt-6">
+        <CardHeader
+          title="Recent orders"
+          actions={
+            <Link href="/portal/orders" className="text-sm text-brand-700 hover:underline">
+              All orders
+            </Link>
+          }
+        />
+        {recent.length === 0 ? (
+          <CardBody className="text-sm text-ink-muted">
+            No orders yet.{" "}
+            <Link href="/portal/catalogue" className="text-brand-700 hover:underline">
+              Browse products
+            </Link>
+          </CardBody>
+        ) : (
+          <ul className="divide-y divide-line text-sm">
+            {recent.map((o) => (
+              <li key={o.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                <Link href={`/portal/orders/${o.id}`} className="font-medium text-brand-700 hover:underline">
+                  {o.number}
+                </Link>
+                <span className="text-ink-muted">{formatDate(o.createdAt)}</span>
+                <OrderStatusBadge status={o.status} />
+                <span className="font-medium tabular-nums">{formatFJD(o.total)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      {deals.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader
+            title="Deal Drops on now"
+            actions={
+              <Link href="/portal/deals" className="text-sm text-brand-700 hover:underline">
+                All deals
+              </Link>
+            }
+          />
+          <ul className="divide-y divide-line text-sm">
+            {deals.map(({ deal, left }) => (
+              <li key={deal.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                <Link href={`/portal/deals/${deal.id}`} className="font-medium text-brand-700 hover:underline">
+                  {deal.name}
+                </Link>
+                <span className="text-ink-muted">{left > 0 ? `${left} units left` : "Sold out"}</span>
+                <span className="text-ink-muted">
+                  <Countdown endsAt={deal.endsAt.toISOString()} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>

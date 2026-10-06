@@ -61,3 +61,26 @@ export async function createCompany(
   });
   return { company, owner, actor: { id: owner.id, companyId: company.id, companyRole: CompanyRole.OWNER } };
 }
+
+export async function createCategory(name = "Canned Fish") {
+  return db.category.create({ data: { name, slug: name.toLowerCase().replace(/\W+/g, "-") } });
+}
+
+export async function createProduct(
+  categoryId: string,
+  opts: { sku?: string; onHand?: number; basePrice?: number; moq?: number; orderMultiple?: number } = {},
+) {
+  return db.product.create({
+    data: {
+      sku: opts.sku ?? "TUN-48",
+      name: "Tuna 48 × 185g",
+      categoryId,
+      basePrice: opts.basePrice ?? 100,
+      moq: opts.moq ?? 1,
+      orderMultiple: opts.orderMultiple ?? 1,
+      cartonCbm: 0.012,
+      cartonWeightKg: 10,
+      stock: { create: { onHand: opts.onHand ?? 0 } },
+    },
+  });
+}

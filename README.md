@@ -8,6 +8,8 @@ The product spec lives in [`docs/SPEC.md`](docs/SPEC.md).
 ```
 apps/web        Next.js app: customer portal (/portal), admin (/admin), auth pages
 packages/db     Prisma schema, migrations, seed data, shared DB client
+packages/pricing  Pricing engine (pure functions, 100% test coverage)
+infra/          AWS infrastructure (Terraform) and deployment notes
 docs/           Specification
 ```
 
@@ -22,7 +24,11 @@ pnpm install                         # also generates the Prisma client
 pnpm db:deploy                       # apply migrations
 pnpm db:seed                         # reference data + fake customers
 pnpm dev                             # http://localhost:3000
+pnpm --filter @vitico/web worker     # in another terminal: sends emails/SMS/push, runs scheduled jobs
 ```
+
+In development the worker prints emails and SMS to its console instead of sending them, so you can
+copy invite and reset links from there.
 
 Create the test database once (used by `pnpm test` and the e2e tests, wiped on each run):
 
@@ -58,6 +64,13 @@ All seeded users have the password `Vitico!2026` (override with `SEED_PASSWORD`)
 | `pnpm db:migrate` | Create a migration after editing `schema.prisma` |
 | `pnpm db:deploy` | Apply migrations |
 | `pnpm db:seed` | Seed development data (refuses to run in production) |
+| `pnpm --filter @vitico/db bootstrap` | Production setup: reference data and the first admin (see `infra/README.md`) |
+| `docker build .` | The production image (web, worker and migrations) |
+
+## Deployment
+
+AWS (ECS Fargate, RDS Postgres, S3, SES, SNS, CloudFront) through Terraform in `infra/terraform`,
+deployed by `.github/workflows/deploy.yml` once CI passes on `main`. See [`infra/README.md`](infra/README.md).
 
 ## How the code is organised
 
@@ -71,5 +84,10 @@ All seeded users have the password `Vitico!2026` (override with `SEED_PASSWORD`)
 - **Auth** is email + password (argon2) with database sessions in an HTTP-only cookie. Accounts lock
   for 15 minutes after 5 failed attempts. Invite and password-reset links are single-use and stored hashed.
 
-Until email delivery is added, invite and password-reset links are shown on screen for the person
-who created them to send on.
+- **UI copy and styling**: plain and direct. No em dashes in any text, statuses are plain coloured
+  words (not pill badges), and products without a photo show an empty neutral box.
+
+- **Notifications** use a transactional outbox: services call `notify()` inside the same database
+  transaction as the change, which writes in-app notifications and queues email / SMS / push rows.
+  The worker (`apps/web/worker`) delivers them with retries, and can run as several copies safely.
+  Invite and reset links are emailed and also shown to the staff member who created them.

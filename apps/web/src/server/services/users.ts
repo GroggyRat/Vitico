@@ -13,6 +13,8 @@ import type { InviteCompanyUserInput } from "@/lib/validation";
 import type { CustomerActor, StaffActor } from "../actors";
 import { audit } from "../audit";
 import { ServiceError } from "../errors";
+import { notify } from "../notifications/notify";
+import { APP_URL } from "@/lib/env";
 
 export const INVITE_TTL_DAYS = 7;
 export const RESET_TTL_HOURS = 24;
@@ -27,6 +29,17 @@ async function issueToken(tx: Tx, userId: string, type: AuthTokenType, ttlMs: nu
     data: { userId, type, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + ttlMs) },
   });
   return token;
+}
+
+const setPasswordLink = (token: string) => `${APP_URL}/set-password/${token}`;
+
+async function sendInvite(tx: Tx, userId: string, token: string) {
+  const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, include: { company: { select: { name: true } } } });
+  await notify(tx, { type: "user.invited", userIds: [userId], vars: { company: user.company?.name ?? "the VITICO team", link: setPasswordLink(token) } });
+}
+
+async function sendReset(tx: Tx, userId: string, token: string) {
+  await notify(tx, { type: "user.password_reset", userIds: [userId], vars: { link: setPasswordLink(token) } });
 }
 
 async function assertEmailFree(db: Db | Tx, email: string) {
@@ -53,6 +66,7 @@ export async function inviteCompanyUser(db: Db, actor: CustomerActor, input: Inv
       },
     });
     const token = await issueToken(tx, user.id, AuthTokenType.INVITE, INVITE_TTL_DAYS * 86_400_000);
+    await sendInvite(tx, user.id, token);
     await audit(tx, {
       actorId: actor.id,
       action: "user.invited",
@@ -120,7 +134,9 @@ export async function resendCompanyInvite(db: Db, actor: CustomerActor, userId: 
   return db.$transaction(async (tx) => {
     const user = await getTeamMember(tx, actor, userId);
     if (user.status !== UserStatus.INVITED) throw new ServiceError("This user has already accepted their invite.");
-    return issueToken(tx, user.id, AuthTokenType.INVITE, INVITE_TTL_DAYS * 86_400_000);
+    const token = await issueToken(tx, user.id, AuthTokenType.INVITE, INVITE_TTL_DAYS * 86_400_000);
+    await sendInvite(tx, user.id, token);
+    return token;
   });
 }
 
@@ -132,6 +148,7 @@ export async function inviteStaff(db: Db, actor: StaffActor, input: { name: stri
   return db.$transaction(async (tx) => {
     const user = await tx.user.create({ data: { ...input, status: UserStatus.INVITED } });
     const token = await issueToken(tx, user.id, AuthTokenType.INVITE, INVITE_TTL_DAYS * 86_400_000);
+    await sendInvite(tx, user.id, token);
     await audit(tx, { actorId: actor.id, action: "staff.invited", entityType: "User", entityId: user.id, data: { staffRole: input.staffRole } });
     return { user, token };
   });
@@ -165,7 +182,9 @@ export async function resendStaffInvite(db: Db, actor: StaffActor, userId: strin
     const user = await tx.user.findFirst({ where: { id: userId, staffRole: { not: null } } });
     if (!user) throw new ServiceError("Staff member not found.");
     if (user.status !== UserStatus.INVITED) throw new ServiceError("This person has already accepted their invite.");
-    return issueToken(tx, user.id, AuthTokenType.INVITE, INVITE_TTL_DAYS * 86_400_000);
+    const token = await issueToken(tx, user.id, AuthTokenType.INVITE, INVITE_TTL_DAYS * 86_400_000);
+    await sendInvite(tx, user.id, token);
+    return token;
   });
 }
 
@@ -182,8 +201,33 @@ export async function createPasswordResetLink(db: Db, actor: StaffActor, userId:
 
   return db.$transaction(async (tx) => {
     const token = await issueToken(tx, user.id, AuthTokenType.PASSWORD_RESET, RESET_TTL_HOURS * 3_600_000);
+    await sendReset(tx, user.id, token);
     await audit(tx, { actorId: actor.id, action: "user.password_reset_link", entityType: "User", entityId: user.id });
     return token;
+  });
+}
+
+export const MAX_RESETS_PER_HOUR = 3;
+
+/**
+ * Self-service "forgot password". Always succeeds silently so the response
+ * doesn't reveal whether an email is registered; rate-limited per user.
+ */
+export async function requestPasswordReset(db: Db, email: string) {
+  const user = await db.user.findUnique({ where: { email: email.toLowerCase() }, include: { company: { select: { status: true } } } });
+  if (!user || user.status !== UserStatus.ACTIVE || (user.company && user.company.status !== "ACTIVE")) return;
+  const recent = await db.authToken.count({
+    where: { userId: user.id, type: AuthTokenType.PASSWORD_RESET, createdAt: { gt: new Date(Date.now() - 3_600_000) } },
+  });
+  // issueToken deletes unused older tokens, so also count the audit trail.
+  const recentAudit = await db.auditLog.count({
+    where: { entityId: user.id, action: "user.password_reset_requested", createdAt: { gt: new Date(Date.now() - 3_600_000) } },
+  });
+  if (Math.max(recent, recentAudit) >= MAX_RESETS_PER_HOUR) return;
+  await db.$transaction(async (tx) => {
+    const token = await issueToken(tx, user.id, AuthTokenType.PASSWORD_RESET, RESET_TTL_HOURS * 3_600_000);
+    await sendReset(tx, user.id, token);
+    await audit(tx, { actorId: null, action: "user.password_reset_requested", entityType: "User", entityId: user.id });
   });
 }
 

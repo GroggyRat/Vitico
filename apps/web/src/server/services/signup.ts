@@ -3,6 +3,7 @@ import { hashPassword } from "@/lib/auth/password";
 import type { SignupInput } from "@/lib/validation";
 import { audit } from "../audit";
 import { ServiceError } from "../errors";
+import { notify, staffWith } from "../notifications/notify";
 
 export const DEFAULT_TIER_CODE = "STANDARD";
 
@@ -18,7 +19,7 @@ export async function applyForAccount(db: Db, input: SignupInput) {
   ]);
   if (existing) throw new ServiceError("An account with this email already exists. Try logging in.", "email");
   if (!region) throw new ServiceError("Choose a valid delivery region.", "regionId");
-  if (!tier) throw new Error(`Tier ${DEFAULT_TIER_CODE} is missing — run the seed.`);
+  if (!tier) throw new Error(`Tier ${DEFAULT_TIER_CODE} is missing. Run the seed.`);
 
   const passwordHash = await hashPassword(input.password);
 
@@ -56,6 +57,12 @@ export async function applyForAccount(db: Db, input: SignupInput) {
       },
     });
     await audit(tx, { actorId: null, action: "company.applied", entityType: "Company", entityId: company.id });
+    await notify(tx, {
+      type: "account.application_received",
+      userIds: await staffWith(tx, "companies.approve"),
+      vars: { company: company.name },
+      link: "/admin/applications",
+    });
     return company;
   });
 }

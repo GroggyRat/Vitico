@@ -4,18 +4,22 @@ import { notFound } from "next/navigation";
 import { CompanyStatus, UserStatus } from "@vitico/db";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
+import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, Td, Th } from "@/components/ui/table";
 import { requireStaff } from "@/lib/auth/guards";
 import { companyRoleLabels, staffCan } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db";
-import { formatDate, formatDateTime, formatFJD } from "@/lib/format";
+import { formatCents, formatDate, formatDateTime, formatFJD } from "@/lib/format";
 import { getCompanyForStaff } from "@/server/services/companies";
 import { resetLinkAction, setCompanySuspendedAction } from "../../actions";
 import { getAssignmentOptions } from "../../options";
 import { companyStatusLabel, companyStatusTone } from "../../status";
 import { EditCompanyForm } from "./edit-form";
+import { WalletAdjustForm } from "./wallet-form";
+import { adjustWalletAction } from "../../rebates/actions";
+import { walletBalance } from "@/server/rebates/service";
 
 export const metadata: Metadata = { title: "Customer" };
 
@@ -27,6 +31,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
   if (!company) notFound();
 
   const canEdit = staffCan(actor.staffRole, "companies.edit");
+  const wallet = await walletBalance(getDb(), company.id);
   const canCredit = staffCan(actor.staffRole, "companies.credit");
   const settled = company.status === CompanyStatus.ACTIVE || company.status === CompanyStatus.SUSPENDED;
 
@@ -34,12 +39,12 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/companies" className="text-ink-muted hover:text-ink">
-          ← Customers
+          Back to Customers
         </Link>
       </div>
       <PageHeader
         title={company.name}
-        description={company.approvedAt ? `Approved ${formatDate(company.approvedAt)} by ${company.approvedBy?.name ?? "—"}` : undefined}
+        description={company.approvedAt ? `Approved ${formatDate(company.approvedAt)} by ${company.approvedBy?.name ?? "-"}` : undefined}
         actions={
           <div className="flex items-center gap-3">
             <Badge tone={companyStatusTone[company.status]}>{companyStatusLabel[company.status]}</Badge>
@@ -55,9 +60,19 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
             {canEdit && company.status === CompanyStatus.SUSPENDED && (
               <ActionButton action={setCompanySuspendedAction.bind(null, company.id, false)}>Reactivate</ActionButton>
             )}
+            {company.status === CompanyStatus.ACTIVE && staffCan(actor.staffRole, "orders.place_for_customer") && (
+              <Link href={`/admin/companies/${company.id}/order`} className={buttonClass("primary", "sm")}>
+                Place order
+              </Link>
+            )}
+            {company.status === CompanyStatus.ACTIVE && staffCan(actor.staffRole, "settings.pricing") && (
+              <Link href={`/admin/pricing/contracts?company=${company.id}`} className={buttonClass("secondary", "sm")}>
+                Contract prices
+              </Link>
+            )}
             {company.status === CompanyStatus.PENDING && (
               <Link href="/admin/applications" className="text-sm font-medium text-brand-700 hover:underline">
-                Review application →
+                Review application
               </Link>
             )}
           </div>
@@ -66,7 +81,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
 
       {approved && company.status === CompanyStatus.ACTIVE && (
         <p role="status" className="mb-6 rounded-md bg-brand-50 px-4 py-3 text-sm text-brand-700">
-          Approved — {company.name} can now sign in.
+          Approved. {company.name} can now sign in.
         </p>
       )}
       {company.rejectionReason && (
@@ -112,13 +127,42 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                 ).map(([k, v]) => (
                   <div key={k} className="contents">
                     <dt className="text-ink-muted">{k}</dt>
-                    <dd>{v || "—"}</dd>
+                    <dd>{v || "-"}</dd>
                   </div>
                 ))}
               </dl>
             )}
           </CardBody>
         </Card>
+
+        {settled && (
+          <Card>
+            <CardHeader title="Rebate wallet" description={`${formatCents(wallet.availableCents)} available · ${formatCents(wallet.pendingCents)} pending`} />
+            {staffCan(actor.staffRole, "rebates.manage") && (
+              <CardBody>
+                <WalletAdjustForm action={adjustWalletAction.bind(null, company.id)} />
+              </CardBody>
+            )}
+          </Card>
+        )}
+
+        {(company.odooPartnerId || company.odooSyncedAt) && (
+          <Card>
+            <CardHeader title="Odoo" />
+            <CardBody>
+              <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+                <dt className="text-ink-muted">Partner ID</dt>
+                <dd>{company.odooPartnerId ?? "-"}</dd>
+                <dt className="text-ink-muted">Balance owing</dt>
+                <dd>{formatFJD(company.odooReceivable)}</dd>
+                <dt className="text-ink-muted">Overdue</dt>
+                <dd className={Number(company.odooOverdue ?? 0) > 0 ? "font-medium text-red-600" : ""}>{formatFJD(company.odooOverdue)}</dd>
+                <dt className="text-ink-muted">Last synced</dt>
+                <dd>{formatDateTime(company.odooSyncedAt)}</dd>
+              </dl>
+            </CardBody>
+          </Card>
+        )}
 
         <Card>
           <CardHeader title="Users" />
