@@ -1,0 +1,228 @@
+// VITICO Wholesale — database schema.
+// Money is stored as Decimal(12,2) in FJD, excluding VAT, unless noted.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Users & auth ────────────────────────────────────────────────────────────
+
+/// Internal VITICO staff roles. Customer users have no staff role.
+enum StaffRole {
+  SUPER_ADMIN
+  ADMIN
+  PRICING_MANAGER
+  SALES_REP
+  ACCOUNTS
+}
+
+/// Roles a user can hold inside a customer company.
+enum CompanyRole {
+  OWNER
+  PURCHASING
+  ACCOUNTS
+}
+
+enum UserStatus {
+  /// Signed up with a company application that is awaiting VITICO approval.
+  PENDING
+  /// Invited, has not set a password yet.
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+/// A user is either staff (staffRole set, companyId null)
+/// or a customer user (companyId + companyRole set, staffRole null).
+/// Enforced by the users_kind_check constraint in the migration.
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  phone        String?
+  passwordHash String?
+  status       UserStatus   @default(INVITED)
+  staffRole    StaffRole?
+  companyId    String?
+  company      Company?     @relation("CompanyUsers", fields: [companyId], references: [id])
+  companyRole  CompanyRole?
+  /// Purchasing users: orders above this FJD amount need Owner approval. Null = no limit.
+  orderLimit   Decimal?     @db.Decimal(12, 2)
+
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sessions          Session[]
+  authTokens        AuthToken[]
+  assignedCompanies Company[]   @relation("SalesRepCompanies")
+  approvedCompanies Company[]   @relation("CompanyApprover")
+  auditLogs         AuditLog[]
+
+  @@index([companyId])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  /// SHA-256 of the session token; the raw token only lives in the cookie.
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum AuthTokenType {
+  INVITE
+  PASSWORD_RESET
+}
+
+/// Single-use tokens sent by link (invites, password resets).
+model AuthToken {
+  id        String        @id @default(cuid())
+  tokenHash String        @unique
+  type      AuthTokenType
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId])
+}
+
+// ─── Companies ───────────────────────────────────────────────────────────────
+
+enum CompanyStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+model Company {
+  id          String        @id @default(cuid())
+  name        String
+  tradingName String?
+  /// Fiji TIN or foreign tax/business number.
+  taxNumber   String?
+  email       String
+  phone       String?
+  status      CompanyStatus @default(PENDING)
+
+  tierId           String
+  tier             Tier    @relation(fields: [tierId], references: [id])
+  /// Default delivery region; drives pricing uplift, VAT and display currency.
+  regionId         String
+  region           Region  @relation(fields: [regionId], references: [id])
+  creditLimit      Decimal @default(0) @db.Decimal(12, 2)
+  paymentTermsDays Int     @default(0)
+
+  salesRepId String?
+  salesRep   User?   @relation("SalesRepCompanies", fields: [salesRepId], references: [id])
+
+  /// res.partner id in Odoo once synced.
+  odooPartnerId Int? @unique
+
+  applicationNotes String?
+  rejectionReason  String?
+  approvedAt       DateTime?
+  approvedById     String?
+  approvedBy       User?     @relation("CompanyApprover", fields: [approvedById], references: [id])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  users     User[]    @relation("CompanyUsers")
+  addresses Address[]
+
+  @@index([status])
+  @@index([salesRepId])
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  label     String
+  line1     String
+  line2     String?
+  city      String
+  regionId  String
+  region    Region   @relation(fields: [regionId], references: [id])
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+// ─── Reference data ──────────────────────────────────────────────────────────
+
+enum UpliftType {
+  NONE
+  PERCENT
+  /// Fixed FJD amount added per unit.
+  FIXED
+}
+
+/// Delivery region hierarchy: country → island group. Drives price uplift,
+/// VAT treatment (domestic vs export) and the indicative display currency.
+model Region {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  name        String
+  parentId    String?
+  parent      Region?    @relation("RegionTree", fields: [parentId], references: [id])
+  children    Region[]   @relation("RegionTree")
+  countryCode String     @db.Char(2)
+  /// ISO 4217 code shown as the indicative local currency.
+  currency    String     @db.Char(3)
+  isExport    Boolean    @default(false)
+  upliftType  UpliftType @default(NONE)
+  upliftValue Decimal    @default(0) @db.Decimal(12, 4)
+  active      Boolean    @default(true)
+  sortOrder   Int        @default(0)
+
+  companies Company[]
+  addresses Address[]
+}
+
+model Tier {
+  id              String  @id @default(cuid())
+  code            String  @unique
+  name            String
+  /// Default tier-wide discount off base price; product-level tier prices override it.
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  sortOrder       Int     @default(0)
+
+  companies Company[]
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String
+  data       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
