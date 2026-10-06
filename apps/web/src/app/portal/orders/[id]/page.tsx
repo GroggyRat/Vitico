@@ -47,7 +47,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/po
     <>
       <div className="mb-2 text-sm">
         <Link href="/portal/orders" className="text-ink-muted hover:text-ink">
-          ← Orders
+          Back to Orders
         </Link>
       </div>
       <PageHeader
@@ -69,8 +69,8 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/po
                 order.status === "PENDING_CUSTOMER_APPROVAL"
                   ? "Order placed. It's waiting for your account owner's approval."
                   : order.paymentMethod === "ON_ACCOUNT"
-                    ? "Thank you — your order has been sent to VITICO."
-                    : "Thank you — your order has been sent. Please pay using the details below so we can dispatch it.",
+                    ? "Thank you, your order has been sent to VITICO."
+                    : "Thank you, your order has been sent. Please pay using the details below so we can dispatch it.",
             }}
           />
         </div>
@@ -98,19 +98,19 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/po
             <CardHeader title="Items" />
             <OrderLines lines={order.lines} />
             <CardBody>
-              <OrderTotals subtotal={order.subtotal} vat={order.vatTotal} total={order.total} isExport={order.isExport} rebate={order.rebateApplied} />
+              <OrderTotals subtotal={order.subtotal} vat={order.vatTotal} total={order.total} isExport={order.isExport} rebate={order.rebateApplied} bond={order.bondApplied} />
             </CardBody>
           </Card>
 
           {needsPayment && canPay && (
             <Card>
-              <CardHeader title="Payment" description={`${paymentMethodLabel[order.paymentMethod]} · ${formatFJD(Number(order.total) - Number(order.rebateApplied))} due before dispatch`} />
+              <CardHeader title="Payment" description={`${paymentMethodLabel[order.paymentMethod]} · ${formatFJD(Number(order.total) - Number(order.rebateApplied) - Number(order.bondApplied))} due before dispatch`} />
               <CardBody className="space-y-5">
                 <PaymentInstructions method={order.paymentMethod} settings={settings} reference={order.number} />
                 {order.paymentStatus === "PENDING_VERIFICATION" ? (
                   <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700">We&apos;ve received your payment details and are confirming them.</p>
                 ) : (
-                  <PaymentForm action={submitPaymentAction.bind(null, order.id)} defaultMethod={order.paymentMethod} amount={(Number(order.total) - Number(order.rebateApplied)).toFixed(2)} />
+                  <PaymentForm action={submitPaymentAction.bind(null, order.id)} defaultMethod={order.paymentMethod} amount={(Number(order.total) - Number(order.rebateApplied) - Number(order.bondApplied)).toFixed(2)} />
                 )}
               </CardBody>
             </Card>

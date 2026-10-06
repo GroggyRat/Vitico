@@ -20,7 +20,7 @@ export default async function EditPromotionPage({ params }: PageProps<"/admin/pr
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/pricing/promotions" className="text-ink-muted hover:text-ink">
-          ← Promotions
+          Back to Promotions
         </Link>
       </div>
       <PageHeader title={promo.name} />

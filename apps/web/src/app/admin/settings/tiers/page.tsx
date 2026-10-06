@@ -61,7 +61,7 @@ export default async function TiersPage() {
                 </Td>
                 <Td className="tabular-nums">{formatCents(s.spendCents)} / 12 months</Td>
                 <Td>
-                  {s.company.tier.name} → <strong>{s.suggested.name}</strong> {s.upgrade ? "▲" : "▼"}
+                  {s.company.tier.name} to <strong>{s.suggested.name}</strong> ({s.upgrade ? "upgrade" : "downgrade"})
                 </Td>
                 <Td className="text-right">
                   {canMove && <ActionButton action={changeTierAction.bind(null, s.company.id, s.suggested.id)}>Move to {s.suggested.name}</ActionButton>}

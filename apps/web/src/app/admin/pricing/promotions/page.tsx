@@ -63,7 +63,7 @@ export default async function PromotionsPage({ searchParams }: PageProps<"/admin
                     {p.minQty > 1 && <span className="text-xs text-ink-muted"> · {p.minQty}+</span>}
                   </Td>
                   <Td className="text-xs text-ink-muted">
-                    {p.startsAt ? formatDateTime(p.startsAt) : "Now"} → {p.endsAt ? formatDateTime(p.endsAt) : "no end"}
+                    {p.startsAt ? formatDateTime(p.startsAt) : "Now"} to {p.endsAt ? formatDateTime(p.endsAt) : "no end"}
                   </Td>
                   <Td className="text-right tabular-nums">{p._count.products}</Td>
                   <Td>

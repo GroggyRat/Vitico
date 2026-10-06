@@ -8,7 +8,7 @@ test("a new customer applies, is approved, and onboards a buyer", async ({ page 
   await page.getByLabel("TIN / registration no.").fill("50-99887-0-1");
   await page.getByLabel("Business phone").fill("+679 885 0000");
   await page.getByLabel("Business email (for invoices)").fill("accounts@savusavu.test");
-  await page.getByLabel("Region").selectOption({ label: "Fiji — Vanua Levu" });
+  await page.getByLabel("Region").selectOption({ label: "Fiji / Vanua Levu" });
   await page.getByLabel("Street address").fill("Main Street");
   await page.getByLabel("Town / city").fill("Savusavu");
   await page.getByLabel("Your name").fill("Kalesi Naivalu");

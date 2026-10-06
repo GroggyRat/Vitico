@@ -5,5 +5,9 @@ const labels: Record<StockStatus, string> = { in_stock: "In stock", low: "Low st
 const tones = { in_stock: "green", low: "amber", out: "red" } as const;
 
 export function StockBadge({ status }: { status: StockStatus }) {
-  return <Badge tone={tones[status]}>{labels[status]}</Badge>;
+  return (
+    <div>
+      <Badge tone={tones[status]}>{labels[status]}</Badge>
+    </div>
+  );
 }

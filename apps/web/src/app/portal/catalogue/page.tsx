@@ -76,7 +76,7 @@ export default async function CataloguePage({ searchParams }: PageProps<"/portal
             href={href({ category: c.slug, page: "" })}
             aria-current={category === c.slug ? "page" : undefined}
             className={cn(
-              "rounded-full border px-3 py-1 text-sm",
+              "rounded-md border px-3 py-1 text-sm",
               category === c.slug ? "border-brand-600 bg-brand-600 text-white" : "border-line bg-surface text-ink-muted hover:text-ink",
             )}
           >
@@ -134,11 +134,11 @@ export default async function CataloguePage({ searchParams }: PageProps<"/portal
 
       {pages > 1 && (
         <div className="mt-6 flex items-center justify-between text-sm">
-          {page > 1 ? <Link href={href({ page: String(page - 1) })} className="text-brand-700 hover:underline">← Previous</Link> : <span />}
+          {page > 1 ? <Link href={href({ page: String(page - 1) })} className="text-brand-700 hover:underline">Previous</Link> : <span />}
           <span className="text-ink-muted">
             Page {page} of {pages}
           </span>
-          {page < pages ? <Link href={href({ page: String(page + 1) })} className="text-brand-700 hover:underline">Next →</Link> : <span />}
+          {page < pages ? <Link href={href({ page: String(page + 1) })} className="text-brand-700 hover:underline">Next</Link> : <span />}
         </div>
       )}
     </>

@@ -39,12 +39,12 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/companies" className="text-ink-muted hover:text-ink">
-          ← Customers
+          Back to Customers
         </Link>
       </div>
       <PageHeader
         title={company.name}
-        description={company.approvedAt ? `Approved ${formatDate(company.approvedAt)} by ${company.approvedBy?.name ?? "—"}` : undefined}
+        description={company.approvedAt ? `Approved ${formatDate(company.approvedAt)} by ${company.approvedBy?.name ?? "-"}` : undefined}
         actions={
           <div className="flex items-center gap-3">
             <Badge tone={companyStatusTone[company.status]}>{companyStatusLabel[company.status]}</Badge>
@@ -72,7 +72,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
             )}
             {company.status === CompanyStatus.PENDING && (
               <Link href="/admin/applications" className="text-sm font-medium text-brand-700 hover:underline">
-                Review application →
+                Review application
               </Link>
             )}
           </div>
@@ -81,7 +81,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
 
       {approved && company.status === CompanyStatus.ACTIVE && (
         <p role="status" className="mb-6 rounded-md bg-brand-50 px-4 py-3 text-sm text-brand-700">
-          Approved — {company.name} can now sign in.
+          Approved. {company.name} can now sign in.
         </p>
       )}
       {company.rejectionReason && (
@@ -127,7 +127,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
                 ).map(([k, v]) => (
                   <div key={k} className="contents">
                     <dt className="text-ink-muted">{k}</dt>
-                    <dd>{v || "—"}</dd>
+                    <dd>{v || "-"}</dd>
                   </div>
                 ))}
               </dl>
@@ -152,7 +152,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
             <CardBody>
               <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
                 <dt className="text-ink-muted">Partner ID</dt>
-                <dd>{company.odooPartnerId ?? "—"}</dd>
+                <dd>{company.odooPartnerId ?? "-"}</dd>
                 <dt className="text-ink-muted">Balance owing</dt>
                 <dd>{formatFJD(company.odooReceivable)}</dd>
                 <dt className="text-ink-muted">Overdue</dt>

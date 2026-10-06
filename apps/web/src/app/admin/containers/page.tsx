@@ -27,12 +27,12 @@ export default async function AdminContainersPage() {
   ]);
   return (
     <>
-      <PageHeader title="Containers" description="Container plans for your customers — theirs and ones you build for them." />
+      <PageHeader title="Containers" description="Container plans for your customers: theirs and ones you build for them." />
       <Card className="mb-6">
         <CardHeader title="Build a container for a customer" />
         <CardBody>
           <NewBuildForm
-            types={types.map((t) => ({ id: t.id, label: `${t.name} — ${Number(t.maxCbm)} m³` }))}
+            types={types.map((t) => ({ id: t.id, label: `${t.name}, ${Number(t.maxCbm)} m³` }))}
             regions={regions}
             companies={companies.map((c) => ({ id: c.id, label: c.name }))}
           />

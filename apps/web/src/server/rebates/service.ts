@@ -202,7 +202,7 @@ async function spendInPeriod(tx: Tx, companyId: string, start: Date, end: Date) 
 
 /**
  * Settles SPEND_TARGET (available immediately) and CONTRACT rules (pending admin review)
- * for the last fully-ended period. Safe to run repeatedly — each period credits once.
+ * for the last fully-ended period. Safe to run repeatedly, each period credits once.
  */
 export async function settlePeriods(db: Db, now = new Date()) {
   let credited = 0;
@@ -221,7 +221,7 @@ export async function settlePeriods(db: Db, now = new Date()) {
           companyId: c.id,
           rule,
           periodKey: p.key,
-          description: `${rule.name} — ${p.key} (spend ${money(spend)})`,
+          description: `${rule.name}, ${p.key} (spend ${money(spend)})`,
           cents,
           status: rule.type === "CONTRACT" ? "PENDING" : "AVAILABLE",
         }, now);

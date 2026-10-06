@@ -5,7 +5,7 @@ test("customer fills a 20 ft container with live volume/weight and orders it", a
   await login(page, "owner@apiawholesale.test");
   await page.getByRole("link", { name: "Containers", exact: true }).click();
   await page.getByLabel("Name").fill("November rice & oil");
-  await page.getByLabel("Container").selectOption({ label: "20 ft — 28 m³ / 21,700 kg" });
+  await page.getByLabel("Container").selectOption({ label: "20 ft, 28 m³ / 21,700 kg" });
   await page.getByRole("button", { name: "Start building" }).click();
   await expect(page.getByRole("heading", { name: "November rice & oil" })).toBeVisible();
 

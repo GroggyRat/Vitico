@@ -57,13 +57,13 @@ export default async function RebatesPage() {
             <ul className="mt-1 space-y-0.5 text-sm">
               {[...cashback, ...early].map((r) => (
                 <li key={r.id}>
-                  {r.name} — {Number(r.percent)}%{r.type === "EARLY_PAYMENT" && ` if paid within ${r.earlyPaymentDays} days`}
+                  {r.name}: {Number(r.percent)}%{r.type === "EARLY_PAYMENT" && ` if paid within ${r.earlyPaymentDays} days`}
                 </li>
               ))}
               {targets.map((t) => (
                 <li key={t.rule.id}>{t.rule.name}</li>
               ))}
-              {cashback.length + early.length + targets.length === 0 && <li className="text-ink-muted">None yet — ask your VITICO rep.</li>}
+              {cashback.length + early.length + targets.length === 0 && <li className="text-ink-muted">None yet. Ask your VITICO rep.</li>}
             </ul>
           </CardBody>
         </Card>

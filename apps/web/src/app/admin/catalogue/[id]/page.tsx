@@ -52,7 +52,7 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/catalogue" className="text-ink-muted hover:text-ink">
-          ← Catalogue
+          Back to Catalogue
         </Link>
       </div>
       <PageHeader
@@ -154,7 +154,7 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
                 <Td className="text-right tabular-nums">
                   {m.allocatedAfter} <span className="text-xs text-ink-muted">{signed(m.allocatedDelta)}</span>
                 </Td>
-                <Td>{m.reason ?? (m.refType ? `${m.refType} ${m.refId?.slice(-8)}` : "—")}</Td>
+                <Td>{m.reason ?? (m.refType ? `${m.refType} ${m.refId?.slice(-8)}` : "-")}</Td>
                 <Td className="text-ink-muted">{m.actor?.name ?? "System"}</Td>
               </tr>
             ))}

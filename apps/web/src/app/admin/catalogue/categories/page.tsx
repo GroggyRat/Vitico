@@ -18,13 +18,13 @@ export default async function CategoriesPage() {
   ]);
   const byId = new Map(rows.map((r) => [r.id, r]));
   const countOf = new Map(counts.map((c) => [c.categoryId, c._count]));
-  const parents = tree.map((c) => ({ id: c.id, label: `${"— ".repeat(c.depth)}${c.name}` }));
+  const parents = tree.map((c) => ({ id: c.id, label: `${"\u00a0\u00a0\u00a0".repeat(c.depth)}${c.name}` }));
 
   return (
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/catalogue" className="text-ink-muted hover:text-ink">
-          ← Catalogue
+          Back to Catalogue
         </Link>
       </div>
       <PageHeader title="Categories" description="Hidden categories (and their products) don't appear in the customer catalogue." />

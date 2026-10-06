@@ -72,7 +72,7 @@ export function CartLines({
               <Td className="text-right font-medium tabular-nums">{formatCents(l.netCents)}</Td>
               <Td className="text-right">
                 <ActionButton action={removeAction(l.product.id)} variant="ghost" aria-label={`Remove ${l.product.name}`}>
-                  ✕
+                  Remove
                 </ActionButton>
               </Td>
             </tr>

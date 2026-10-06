@@ -1,5 +1,4 @@
 import { convert } from "@vitico/pricing";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import { formatCents, formatForeign } from "@/lib/format";
 
@@ -28,10 +27,11 @@ export function PriceTag({ unitCents, baseCents, label, sellUnit, vatPercent, cu
         {vatPercent > 0 ? `excl. ${vatPercent}% VAT` : "VAT 0%"}
         {currency && ` · ${formatForeign(convert(unitCents, currency.perFjd), currency.code)}`}
       </div>
-      <div className="flex flex-wrap gap-1">
-        {discounted && <Badge tone="brand">{label.split(" · ")[0]}</Badge>}
-        {fcccSavingPercent != null && fcccSavingPercent > 0 && <Badge tone="green">{fcccSavingPercent}% below FCCC</Badge>}
-      </div>
+      {(discounted || (fcccSavingPercent != null && fcccSavingPercent > 0)) && (
+        <div className="text-xs text-ink-muted">
+          {[discounted && label.split(" · ")[0], fcccSavingPercent != null && fcccSavingPercent > 0 && `${fcccSavingPercent}% below FCCC`].filter(Boolean).join(" · ")}
+        </div>
+      )}
     </div>
   );
 }

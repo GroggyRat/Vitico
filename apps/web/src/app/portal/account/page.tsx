@@ -53,7 +53,7 @@ export default async function AccountPage() {
               {details.map(([k, v]) => (
                 <div key={k} className="contents">
                   <dt className="text-ink-muted">{k}</dt>
-                  <dd>{v || "—"}</dd>
+                  <dd>{v || "-"}</dd>
                 </div>
               ))}
             </dl>

@@ -47,7 +47,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/orders" className="text-ink-muted hover:text-ink">
-          ← Orders
+          Back to Orders
         </Link>
       </div>
       <PageHeader
@@ -86,7 +86,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
             <CardHeader title="Items" />
             <OrderLines lines={order.lines} showCalculated />
             <CardBody>
-              <OrderTotals subtotal={order.subtotal} vat={order.vatTotal} total={order.total} isExport={order.isExport} rebate={order.rebateApplied} />
+              <OrderTotals subtotal={order.subtotal} vat={order.vatTotal} total={order.total} isExport={order.isExport} rebate={order.rebateApplied} bond={order.bondApplied} />
             </CardBody>
           </Card>
 
@@ -96,7 +96,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
               {order.payments.length === 0 && order.paymentMethod !== "ON_ACCOUNT" && <p className="text-sm text-ink-muted">No payment submitted yet.</p>}
               {order.paymentStatus === "ON_ACCOUNT" && (
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <span>On credit account — invoice when dispatched.</span>
+                  <span>On credit account. Invoice when dispatched.</span>
                   {canVerify && (
                     <ActionButton action={markPaidAction.bind(null, order.id)} confirm="Mark this invoice as paid? It frees the customer's credit.">
                       Mark invoice paid
@@ -111,7 +111,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
                       {paymentMethodLabel[p.method]} {formatFJD(p.amount)} · ref <span className="font-mono">{p.reference}</span>
                     </div>
                     <div className="text-xs text-ink-muted">
-                      {formatDateTime(p.createdAt)} by {p.submittedBy?.name ?? "—"}
+                      {formatDateTime(p.createdAt)} by {p.submittedBy?.name ?? "-"}
                       {p.verifiedBy && ` · reviewed by ${p.verifiedBy.name}`}
                     </div>
                     {p.proofKey && (
@@ -146,7 +146,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
                 <div className="flex flex-wrap gap-2">
                   {stepTargets.map((s) => (
                     <ActionButton key={s} action={advanceAction.bind(null, order.id, s)} variant={s === "COMPLETED" ? "primary" : "secondary"}>
-                      {order.status === "ON_HOLD" ? `Resume → ${statusLabel[s]}` : `Mark ${statusLabel[s].toLowerCase()}`}
+                      {order.status === "ON_HOLD" ? `Resume: ${statusLabel[s]}` : `Mark ${statusLabel[s].toLowerCase()}`}
                     </ActionButton>
                   ))}
                 </div>
@@ -166,7 +166,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
                   <NoteActionForm
                     action={cancelAction.bind(null, order.id)}
                     button="Cancel order"
-                    label={`Reason (shared with the customer)${HOLDS_STOCK.includes(order.status) ? " — reserved stock will be released" : ""}`}
+                    label={`Reason (shared with the customer)${HOLDS_STOCK.includes(order.status) ? ". Reserved stock will be released" : ""}`}
                     required
                     variant="danger"
                   />

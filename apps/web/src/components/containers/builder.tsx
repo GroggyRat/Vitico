@@ -46,7 +46,7 @@ export async function ContainerBuilder({ buildId, access, base }: { buildId: str
     <>
       <div className="mb-2 text-sm">
         <Link href={base} className="text-ink-muted hover:text-ink">
-          ← Containers
+          Back to Containers
         </Link>
       </div>
       <PageHeader
@@ -70,7 +70,7 @@ export async function ContainerBuilder({ buildId, access, base }: { buildId: str
           </Link>
         </p>
       )}
-      {fill.over && <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm font-medium text-red-700">Over the container&apos;s limit — remove cartons or pick a bigger container before ordering.</p>}
+      {fill.over && <p className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm font-medium text-red-700">Over the container&apos;s limit. Remove cartons or pick a bigger container before ordering.</p>}
       {fill.warning && !fill.over && (
         <p className="mb-4 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">Nearly full ({Math.max(fill.cbmPct, fill.weightPct).toFixed(0)}% by {fill.limitedBy}).</p>
       )}
@@ -120,7 +120,7 @@ export async function ContainerBuilder({ buildId, access, base }: { buildId: str
               <CardBody className="space-y-3">
                 {priced.lines.map((l) => (
                   <div key={l.product.id} className="text-sm">
-                    <span className="font-medium">{l.product.name}</span> — calculated {formatCents(l.calculatedCents)}
+                    <span className="font-medium">{l.product.name}</span>, calculated {formatCents(l.calculatedCents)}
                     {l.override?.belowMargin && <span className="ml-2 text-xs font-medium text-red-600">Below cost + minimum margin</span>}
                     <OverrideForm
                       action={overrideLineAction.bind(null, build.id, l.product.id)}
@@ -167,7 +167,7 @@ export async function ContainerBuilder({ buildId, access, base }: { buildId: str
                     action={updateBuildAction.bind(null, build.id)}
                     types={types.map((t) => ({ id: t.id, label: `${t.name} (${Number(t.maxCbm)} m³)` }))}
                     regions={regions}
-                    addresses={addresses.map((a) => ({ id: a.id, label: `${a.label} — ${a.city}, ${a.region.name}` }))}
+                    addresses={addresses.map((a) => ({ id: a.id, label: `${a.label}, ${a.city}, ${a.region.name}` }))}
                     values={{
                       name: build.name,
                       containerTypeId: build.containerTypeId,

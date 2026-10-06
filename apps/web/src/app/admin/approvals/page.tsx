@@ -48,7 +48,7 @@ export default async function ApprovalsPage() {
                   <Td className="text-xs">
                     {manual.map((l) => (
                       <div key={l.id}>
-                        {l.sku}: {formatFJD(l.unitPrice)} <span className="text-ink-muted">(calc. {formatFJD(l.calculatedUnitPrice)})</span> — {l.overrideReason}
+                        {l.sku}: {formatFJD(l.unitPrice)} <span className="text-ink-muted">(calc. {formatFJD(l.calculatedUnitPrice)})</span>, {l.overrideReason}
                       </div>
                     ))}
                   </Td>

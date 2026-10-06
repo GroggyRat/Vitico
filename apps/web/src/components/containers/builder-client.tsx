@@ -122,7 +122,7 @@ export function LinesEditor({
           <SubmitButton variant={dirty ? "primary" : "secondary"} pendingText="Saving…">
             Save quantities &amp; update prices
           </SubmitButton>
-          {dirty && <span className="text-xs text-amber-700">Unsaved changes — prices update when you save.</span>}
+          {dirty && <span className="text-xs text-amber-700">Unsaved changes. Prices update when you save.</span>}
           {state?.ok && !dirty && <span className="text-xs text-brand-700">Saved.</span>}
         </div>
       )}

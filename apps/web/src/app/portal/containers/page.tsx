@@ -28,7 +28,7 @@ export default async function ContainersPage() {
         <CardHeader title="New container" />
         <CardBody>
           <NewBuildForm
-            types={types.map((t) => ({ id: t.id, label: `${t.name} — ${Number(t.maxCbm)} m³ / ${Number(t.maxWeightKg).toLocaleString()} kg` }))}
+            types={types.map((t) => ({ id: t.id, label: `${t.name}, ${Number(t.maxCbm)} m³ / ${Number(t.maxWeightKg).toLocaleString()} kg` }))}
             regions={regions}
             defaultRegionId={company.regionId}
           />

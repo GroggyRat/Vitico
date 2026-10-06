@@ -19,7 +19,7 @@ export async function applyForAccount(db: Db, input: SignupInput) {
   ]);
   if (existing) throw new ServiceError("An account with this email already exists. Try logging in.", "email");
   if (!region) throw new ServiceError("Choose a valid delivery region.", "regionId");
-  if (!tier) throw new Error(`Tier ${DEFAULT_TIER_CODE} is missing — run the seed.`);
+  if (!tier) throw new Error(`Tier ${DEFAULT_TIER_CODE} is missing. Run the seed.`);
 
   const passwordHash = await hashPassword(input.password);
 

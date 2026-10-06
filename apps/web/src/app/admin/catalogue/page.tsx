@@ -152,11 +152,11 @@ export default async function CataloguePage({ searchParams }: PageProps<"/admin/
       </Card>
       {pages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm">
-          {page > 1 ? <Link href={`?${qs(page - 1)}`} className="text-brand-700 hover:underline">← Previous</Link> : <span />}
+          {page > 1 ? <Link href={`?${qs(page - 1)}`} className="text-brand-700 hover:underline">Previous</Link> : <span />}
           <span className="text-ink-muted">
             Page {page} of {pages}
           </span>
-          {page < pages ? <Link href={`?${qs(page + 1)}`} className="text-brand-700 hover:underline">Next →</Link> : <span />}
+          {page < pages ? <Link href={`?${qs(page + 1)}`} className="text-brand-700 hover:underline">Next</Link> : <span />}
         </div>
       )}
     </>
