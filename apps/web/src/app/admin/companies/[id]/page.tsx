@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CompanyStatus, UserStatus } from "@vitico/db";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
+import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, Td, Th } from "@/components/ui/table";
@@ -54,6 +55,16 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
             )}
             {canEdit && company.status === CompanyStatus.SUSPENDED && (
               <ActionButton action={setCompanySuspendedAction.bind(null, company.id, false)}>Reactivate</ActionButton>
+            )}
+            {company.status === CompanyStatus.ACTIVE && staffCan(actor.staffRole, "orders.place_for_customer") && (
+              <Link href={`/admin/companies/${company.id}/order`} className={buttonClass("primary", "sm")}>
+                Place order
+              </Link>
+            )}
+            {company.status === CompanyStatus.ACTIVE && staffCan(actor.staffRole, "settings.pricing") && (
+              <Link href={`/admin/pricing/contracts?company=${company.id}`} className={buttonClass("secondary", "sm")}>
+                Contract prices
+              </Link>
             )}
             {company.status === CompanyStatus.PENDING && (
               <Link href="/admin/applications" className="text-sm font-medium text-brand-700 hover:underline">

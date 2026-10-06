@@ -306,3 +306,48 @@ export const exchangeRateSchema = z.object({
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, { error: "Use a 3-letter currency code." }),
   perFjd: z.coerce.number().positive({ error: "Enter a positive rate." }),
 });
+
+// ─── Cart & orders ───────────────────────────────────────────────────────────
+
+export const qtySchema = z.coerce.number({ error: "Enter a quantity." }).int({ error: "Use whole units." }).min(0).max(100_000);
+
+export const cartDetailsSchema = z
+  .object({
+    delivery: z.string().min(1, { error: "Choose delivery or pickup." }),
+    poNumber: optionalText(),
+    notes: optionalText(),
+    requestedDate: optionalDate(),
+  })
+  .transform((v) => ({
+    pickup: v.delivery === "pickup",
+    addressId: v.delivery === "pickup" ? null : v.delivery,
+    poNumber: v.poNumber ?? null,
+    notes: v.notes ?? null,
+    requestedDate: v.requestedDate,
+  }));
+
+export const paymentMethodSchema = z.enum(["ON_ACCOUNT", "BANK_DEPOSIT", "MPAISA", "MYCASH"], { error: "Choose a payment method." });
+
+export const submitPaymentSchema = z.object({
+  method: z.enum(["BANK_DEPOSIT", "MPAISA", "MYCASH"], { error: "Choose how you paid." }),
+  amount: moneySchema.refine((v) => v > 0, { error: "Enter the amount paid." }),
+  reference: trimmed().min(3, { error: "Enter the transaction / receipt reference." }).max(100),
+});
+
+export const reasonSchema = z.object({ reason: trimmed().min(3, { error: "Give a reason." }).max(1000) });
+
+export const overrideSchema = z.object({
+  price: optionalMoney,
+  reason: optionalText(),
+});
+
+export const paymentSettingsSchema = z.object({
+  bankName: z.string().trim().max(100).default(""),
+  accountName: z.string().trim().max(100).default(""),
+  accountNumber: z.string().trim().max(50).default(""),
+  branch: z.string().trim().max(100).default(""),
+  swift: z.string().trim().max(20).default(""),
+  mpaisaNumber: z.string().trim().max(30).default(""),
+  mycashNumber: z.string().trim().max(30).default(""),
+  note: z.string().trim().max(1000).default(""),
+});

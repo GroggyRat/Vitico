@@ -326,6 +326,25 @@ async function main() {
       });
     }
   }
+  // Sample payment details shown to customers (replace with VITICO's real details in Admin → Payment details).
+  await db.appSetting.upsert({
+    where: { key: "payments" },
+    update: {},
+    create: {
+      key: "payments",
+      value: {
+        bankName: "Sample Bank (Fiji)",
+        accountName: "VITICO Wholesale Ltd",
+        accountNumber: "0000-000000-00",
+        branch: "Suva",
+        swift: "SAMPFJFJ",
+        mpaisaNumber: "000000",
+        mycashNumber: "000000",
+        note: "Use your order number as the payment reference.",
+      },
+    },
+  });
+
   // Indicative exchange rates (units per 1 FJD). Placeholders until refreshed from the rate service.
   for (const [currency, perFjd] of [["WST", 1.2], ["TOP", 1.04], ["VUV", 52.9], ["SBD", 3.72], ["AUD", 0.68], ["NZD", 0.75]] as const) {
     await db.exchangeRate.upsert({ where: { currency }, update: {}, create: { currency, perFjd, source: "seed" } });

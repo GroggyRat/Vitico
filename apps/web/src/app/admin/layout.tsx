@@ -8,12 +8,16 @@ const nav: { href: string; label: string; capability: StaffCapability; exact?: b
   { href: "/admin", label: "Overview", capability: "companies.view", exact: true },
   { href: "/admin/applications", label: "Applications", capability: "companies.approve" },
   { href: "/admin/companies", label: "Customers", capability: "companies.view" },
+  { href: "/admin/orders", label: "Orders", capability: "orders.view" },
+  { href: "/admin/approvals", label: "Price approvals", capability: "prices.approve" },
+  { href: "/admin/payments", label: "Payments", capability: "payments.verify" },
   { href: "/admin/catalogue", label: "Catalogue", capability: "catalogue.view" },
   { href: "/admin/pricing", label: "Pricing", capability: "settings.pricing" },
   { href: "/admin/pricing/check", label: "Price check", capability: "pricing.check" },
   { href: "/admin/staff", label: "Staff", capability: "staff.manage" },
   { href: "/admin/settings/regions", label: "Regions", capability: "settings.pricing" },
   { href: "/admin/settings/tiers", label: "Tiers", capability: "settings.pricing" },
+  { href: "/admin/settings/payments", label: "Payment details", capability: "settings.payments" },
   { href: "/admin/audit", label: "Audit log", capability: "audit.view" },
 ];
 

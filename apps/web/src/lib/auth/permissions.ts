@@ -13,6 +13,12 @@ export const staffCapabilities = {
   "catalogue.manage": ["SUPER_ADMIN", "ADMIN", "PRICING_MANAGER"],
   "stock.adjust": ["SUPER_ADMIN", "ADMIN"],
   "pricing.check": ["SUPER_ADMIN", "ADMIN", "PRICING_MANAGER", "SALES_REP", "ACCOUNTS"],
+  "orders.view": ["SUPER_ADMIN", "ADMIN", "PRICING_MANAGER", "SALES_REP", "ACCOUNTS"],
+  "orders.manage": ["SUPER_ADMIN", "ADMIN"],
+  "orders.place_for_customer": ["SUPER_ADMIN", "ADMIN", "SALES_REP"],
+  "prices.approve": ["SUPER_ADMIN", "PRICING_MANAGER"],
+  "payments.verify": ["SUPER_ADMIN", "ADMIN", "ACCOUNTS"],
+  "settings.payments": ["SUPER_ADMIN", "ACCOUNTS"],
 } satisfies Record<string, StaffRole[]>;
 
 export type StaffCapability = keyof typeof staffCapabilities;

@@ -67,6 +67,13 @@ model User {
   approvedCompanies Company[]       @relation("CompanyApprover")
   auditLogs         AuditLog[]
   stockMovements    StockMovement[]
+  carts             Cart[]
+  ordersPlaced      Order[]         @relation("OrdersPlaced")
+  ordersApproved    Order[]         @relation("OrdersApproved")
+  pricesApproved    Order[]         @relation("OrderPricesApproved")
+  orderEvents       OrderEvent[]
+  paymentsSubmitted Payment[]       @relation("PaymentsSubmitted")
+  paymentsVerified  Payment[]       @relation("PaymentsVerified")
 
   @@index([companyId])
 }
@@ -149,6 +156,9 @@ model Company {
   users          User[]          @relation("CompanyUsers")
   addresses      Address[]
   contractPrices ContractPrice[]
+  carts          Cart[]
+  savedLists     SavedList[]
+  orders         Order[]
 
   @@index([status])
   @@index([salesRepId])
@@ -167,6 +177,7 @@ model Address {
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  carts     Cart[]
 
   @@index([companyId])
 }
@@ -202,6 +213,7 @@ model Region {
   addresses      Address[]
   contractPrices ContractPrice[]
   fcccPrices     FcccPrice[]
+  orders         Order[]
 }
 
 model Tier {
@@ -294,6 +306,9 @@ model Product {
   quantityBreaks QuantityBreak[]
   promotions     PromotionProduct[]
   fcccPrices     FcccPrice[]
+  cartItems      CartItem[]
+  savedListItems SavedListItem[]
+  orderLines     OrderLine[]
 
   @@index([categoryId])
   @@index([active])
@@ -470,4 +485,229 @@ model AppSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// ─── Carts & saved lists ─────────────────────────────────────────────────────
+
+/// One cart per (user, company). Sales reps get a separate cart per customer they order for.
+model Cart {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId     String
+  company       Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Null = pickup.
+  addressId     String?
+  address       Address?   @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  pickup        Boolean    @default(false)
+  poNumber      String?
+  notes         String?
+  requestedDate DateTime?
+  updatedAt     DateTime   @updatedAt
+  items         CartItem[]
+
+  @@unique([userId, companyId])
+}
+
+model CartItem {
+  id             String   @id @default(cuid())
+  cartId         String
+  cart           Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty            Int
+  /// Staff-only manual price; needs pricing approval when the order is placed.
+  overridePrice  Decimal? @db.Decimal(12, 2)
+  overrideReason String?
+  createdAt      DateTime @default(now())
+
+  @@unique([cartId, productId])
+}
+
+model SavedList {
+  id          String          @id @default(cuid())
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  createdById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  items       SavedListItem[]
+
+  @@unique([companyId, name])
+}
+
+model SavedListItem {
+  listId    String
+  list      SavedList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty       Int
+
+  @@id([listId, productId])
+}
+
+// ─── Orders ──────────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  DRAFT
+  PENDING_CUSTOMER_APPROVAL
+  PENDING_PRICE_APPROVAL
+  SUBMITTED
+  CONFIRMED
+  PROCESSING
+  READY
+  ON_HOLD
+  DISPATCHED
+  PARTIALLY_FULFILLED
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderType {
+  STANDARD
+  CONTAINER
+  DEAL
+}
+
+enum PaymentMethod {
+  ON_ACCOUNT
+  BANK_DEPOSIT
+  MPAISA
+  MYCASH
+  REBATE_WALLET
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING_VERIFICATION
+  PAID
+  /// Invoiced on the customer's credit account.
+  ON_ACCOUNT
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  /// Human-friendly, e.g. VIT-001001.
+  number     String      @unique @default(dbgenerated("('VIT-'::text || lpad((nextval('order_number_seq'::regclass))::text, 6, '0'::text))"))
+  type       OrderType   @default(STANDARD)
+  status     OrderStatus
+  companyId  String
+  company    Company     @relation(fields: [companyId], references: [id])
+  placedById String
+  placedBy   User        @relation("OrdersPlaced", fields: [placedById], references: [id])
+  /// Set when a sales rep / admin placed it for the customer.
+  onBehalf   Boolean     @default(false)
+
+  pickup        Boolean   @default(false)
+  regionId      String
+  region        Region    @relation(fields: [regionId], references: [id])
+  /// Delivery address snapshot (null for pickup).
+  deliveryLabel String?
+  deliveryLine1 String?
+  deliveryLine2 String?
+  deliveryCity  String?
+  poNumber      String?
+  notes         String?
+  requestedDate DateTime?
+
+  isExport Boolean @default(false)
+  subtotal Decimal @db.Decimal(12, 2)
+  vatTotal Decimal @db.Decimal(12, 2)
+  total    Decimal @db.Decimal(12, 2)
+
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(UNPAID)
+
+  customerApprovedById String?
+  customerApprovedBy   User?     @relation("OrdersApproved", fields: [customerApprovedById], references: [id])
+  customerApprovedAt   DateTime?
+  priceApprovedById    String?
+  priceApprovedBy      User?     @relation("OrderPricesApproved", fields: [priceApprovedById], references: [id])
+  priceApprovedAt      DateTime?
+  cancelReason         String?
+
+  odooOrderId Int?      @unique
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lines    OrderLine[]
+  events   OrderEvent[]
+  payments Payment[]
+
+  @@index([companyId, createdAt])
+  @@index([status])
+}
+
+model OrderLine {
+  id                  String  @id @default(cuid())
+  orderId             String
+  order               Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId           String
+  product             Product @relation(fields: [productId], references: [id])
+  sku                 String
+  name                String
+  sellUnit            String
+  qty                 Int
+  qtyFulfilled        Int?
+  /// What the customer pays per unit (FJD excl. VAT).
+  unitPrice           Decimal @db.Decimal(12, 2)
+  /// What the pricing engine said; differs from unitPrice only for approved overrides.
+  calculatedUnitPrice Decimal @db.Decimal(12, 2)
+  priceSource         String
+  priceLabel          String
+  overrideReason      String?
+  vatPercent          Decimal @db.Decimal(5, 2)
+  lineNet             Decimal @db.Decimal(12, 2)
+  lineVat             Decimal @db.Decimal(12, 2)
+  cartonCbm           Decimal @db.Decimal(10, 4)
+  cartonWeightKg      Decimal @db.Decimal(10, 3)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+/// Order timeline (status changes, approvals, notes).
+model OrderEvent {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type       String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus?
+  note       String?
+  actorId    String?
+  actor      User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime     @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model Payment {
+  id            String              @id @default(cuid())
+  orderId       String
+  order         Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method        PaymentMethod
+  amount        Decimal             @db.Decimal(12, 2)
+  /// Bank / M-Paisa / MyCash transaction reference.
+  reference     String
+  /// Storage key of an uploaded proof (receipt photo / PDF).
+  proofKey      String?
+  status        PaymentRecordStatus @default(PENDING)
+  submittedById String?
+  submittedBy   User?               @relation("PaymentsSubmitted", fields: [submittedById], references: [id], onDelete: SetNull)
+  verifiedById  String?
+  verifiedBy    User?               @relation("PaymentsVerified", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime            @default(now())
+
+  @@index([status])
 }
