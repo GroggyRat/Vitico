@@ -5,6 +5,7 @@
  * All seeded users share the password in SEED_PASSWORD (default below).
  */
 import { hash } from "@node-rs/argon2";
+import { seedCategories, seedProducts } from "./seed-catalogue";
 import {
   CompanyRole,
   CompanyStatus,
@@ -229,6 +230,58 @@ async function main() {
       },
     });
   }
+
+  // Catalogue (parents first; seedCategories is ordered that way).
+  for (const [i, c] of seedCategories.entries()) {
+    const parentId = c.parent ? (await db.category.findUniqueOrThrow({ where: { slug: c.parent } })).id : null;
+    await db.category.upsert({
+      where: { slug: c.slug },
+      update: {},
+      create: { slug: c.slug, name: c.name, parentId, sortOrder: i },
+    });
+  }
+  let newProducts = 0;
+  for (const p of seedProducts) {
+    if (await db.product.findUnique({ where: { sku: p.sku } })) continue;
+    const category = await db.category.findUniqueOrThrow({ where: { slug: p.category } });
+    await db.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          sku: p.sku,
+          name: p.name,
+          brand: p.brand,
+          categoryId: category.id,
+          sellUnit: p.sellUnit,
+          unitsPerCarton: p.units,
+          moq: p.moq ?? 1,
+          orderMultiple: p.multiple ?? 1,
+          cartonCbm: p.cbm,
+          cartonWeightKg: p.kg,
+          basePrice: p.price,
+          costPrice: p.cost,
+          vatCategory: p.vat ?? "STANDARD",
+          tags: p.tags ?? [],
+          stock: { create: { onHand: p.stock } },
+        },
+      });
+      if (p.stock > 0) {
+        await tx.stockMovement.create({
+          data: {
+            productId: product.id,
+            type: "RECEIPT",
+            onHandDelta: p.stock,
+            onHandAfter: p.stock,
+            reservedAfter: 0,
+            allocatedAfter: 0,
+            reason: "Opening stock (seed)",
+            actorId: admin.id,
+          },
+        });
+      }
+    });
+    newProducts++;
+  }
+  console.log(`Seeded ${seedCategories.length} categories, ${newProducts} new products.`);
 
   console.log(`Seeded ${regions.length} regions, ${tiers.length} tiers, ${staff.length} staff, ${companies.length} companies.`);
   console.log(`Log in as admin@vitico.test / ${PASSWORD}`);

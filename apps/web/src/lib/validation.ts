@@ -22,10 +22,15 @@ export const passwordSchema = z
   .regex(/[a-zA-Z]/, { error: "Include at least one letter." })
   .regex(/[0-9]/, { error: "Include at least one number." });
 
-export const moneySchema = z.coerce
-  .number({ error: "Enter an amount." })
-  .min(0, { error: "Must be 0 or more." })
-  .max(99_999_999.99)
+export const moneySchema = z
+  .preprocess(
+    // Blank inputs mean "not entered", not zero.
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.coerce
+      .number({ error: "Enter an amount." })
+      .min(0, { error: "Must be 0 or more." })
+      .max(99_999_999.99),
+  )
   .transform((v) => Math.round(v * 100) / 100);
 
 const optionalMoney = z
@@ -128,3 +133,74 @@ export const addressSchema = z.object({
   regionId: trimmed().min(1, { error: "Choose a region." }),
 });
 export type AddressInput = z.infer<typeof addressSchema>;
+
+// ─── Catalogue ───────────────────────────────────────────────────────────────
+
+const intField = (min: number, label: string) =>
+  z.coerce.number({ error: `Enter ${label}.` }).int({ error: `${label} must be a whole number.` }).min(min, { error: `${label} must be at least ${min}.` });
+
+const checkbox = z.preprocess((v) => v === "on" || v === "true" || v === true || v === "1" || v === "yes", z.boolean());
+
+export const vatCategorySchema = z.enum(["STANDARD", "ZERO_RATED", "EXEMPT"]);
+
+export const productSchema = z
+  .object({
+    sku: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .min(2, { error: "Enter a SKU." })
+      .max(40)
+      .regex(/^[A-Z0-9._-]+$/, { error: "Use letters, numbers, dots, dashes or underscores." }),
+    barcode: optionalText(),
+    name: trimmed().min(2, { error: "Enter a product name." }).max(200),
+    brand: optionalText(),
+    description: optionalText(),
+    categoryId: trimmed().min(1, { error: "Choose a category." }),
+    sellUnit: trimmed().min(1, { error: "Describe the sell unit, e.g. Carton." }).max(100),
+    unitsPerCarton: intField(1, "units per carton"),
+    moq: intField(1, "minimum order"),
+    orderMultiple: intField(1, "order multiple"),
+    cartonCbm: z.coerce.number().min(0).max(100).transform((v) => Math.round(v * 10_000) / 10_000),
+    cartonWeightKg: z.coerce.number().min(0).max(100_000).transform((v) => Math.round(v * 1000) / 1000),
+    basePrice: moneySchema,
+    costPrice: optionalMoney,
+    vatCategory: vatCategorySchema,
+    imageUrl: z
+      .union([z.literal(""), z.url({ protocol: /^https?$/, error: "Enter a full http(s) image URL." })])
+      .optional()
+      .transform((v) => v || null),
+    tags: z
+      .string()
+      .optional()
+      .transform((v) =>
+        (v ?? "")
+          .split(",")
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    lowStockThreshold: intField(0, "low-stock threshold"),
+    active: checkbox,
+  })
+  .refine((p) => p.moq % p.orderMultiple === 0, {
+    error: "Minimum order must be a multiple of the order multiple.",
+    path: ["moq"],
+  });
+export type ProductInput = z.infer<typeof productSchema>;
+
+export const categorySchema = z.object({
+  name: trimmed().min(2, { error: "Enter a name." }).max(100),
+  parentId: optionalText(),
+  sortOrder: z.coerce.number().int().min(0).max(10_000).default(0),
+  active: checkbox,
+});
+export type CategoryInput = z.infer<typeof categorySchema>;
+
+export const stockAdjustSchema = z.object({
+  type: z.enum(["RECEIPT", "ADJUSTMENT"]),
+  qty: z.coerce
+    .number({ error: "Enter a quantity." })
+    .int({ error: "Use whole sell units." })
+    .refine((n) => n !== 0, { error: "Quantity can't be zero." }),
+  reason: trimmed().min(3, { error: "Say why (e.g. container MSKU1234 received, stocktake)." }).max(500),
+});

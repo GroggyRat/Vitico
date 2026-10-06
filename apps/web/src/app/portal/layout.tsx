@@ -18,6 +18,7 @@ export default async function PortalLayout({ children }: LayoutProps<"/portal">)
               <NavLink href="/portal" exact>
                 Dashboard
               </NavLink>
+              <NavLink href="/portal/catalogue">Products</NavLink>
               {companyCan(user.companyRole, "team.manage") && <NavLink href="/portal/team">Team</NavLink>}
               <NavLink href="/portal/account">Account</NavLink>
             </nav>
