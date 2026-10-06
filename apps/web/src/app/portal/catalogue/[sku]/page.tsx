@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PriceTag } from "@/components/catalogue/price-tag";
+import { AddToCart } from "@/components/orders/add-to-cart";
 import { ProductImage } from "@/components/catalogue/product-image";
 import { StockBadge } from "@/components/catalogue/stock-badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { requireCustomer } from "@/lib/auth/guards";
+import { companyCan } from "@/lib/auth/permissions";
+import { addToCartAction } from "../../cart/actions";
 import { getDb } from "@/lib/db";
 import { formatCents, formatDate } from "@/lib/format";
 import { createPricer } from "@/server/services/pricing";
@@ -83,6 +86,9 @@ export default async function ProductPage({ params }: PageProps<"/portal/catalog
                 fcccSavingPercent={fccc?.savingPercent}
               />
               {atMoq.label.includes(" · ") && <p className="text-xs text-ink-muted">{atMoq.label}</p>}
+              {companyCan(actor.companyRole, "orders.place") && (
+                <AddToCart action={addToCartAction.bind(null, product.id)} moq={product.moq} multiple={product.orderMultiple} disabled={status === "out"} />
+              )}
               {atMoq.nextBreak && (
                 <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700">
                   Order {atMoq.nextBreak.minQty}+ to pay {formatCents(atMoq.nextBreak.unitCents)} each.

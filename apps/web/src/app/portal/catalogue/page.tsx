@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PriceTag } from "@/components/catalogue/price-tag";
+import { AddToCart } from "@/components/orders/add-to-cart";
 import { ProductImage } from "@/components/catalogue/product-image";
 import { StockBadge } from "@/components/catalogue/stock-badge";
 import { buttonClass } from "@/components/ui/button";
@@ -8,6 +9,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/form";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireCustomer } from "@/lib/auth/guards";
+import { companyCan } from "@/lib/auth/permissions";
+import { addToCartAction } from "../cart/actions";
 import { getCategoryTree } from "@/lib/categories";
 import { cn } from "@/lib/cn";
 import { getDb } from "@/lib/db";
@@ -19,6 +22,7 @@ export const metadata: Metadata = { title: "Products" };
 
 export default async function CataloguePage({ searchParams }: PageProps<"/portal/catalogue">) {
   const { actor } = await requireCustomer();
+  const canOrder = companyCan(actor.companyRole, "orders.place");
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const category = typeof sp.category === "string" ? sp.category : "";
@@ -85,41 +89,46 @@ export default async function CataloguePage({ searchParams }: PageProps<"/portal
         <Card className="py-12 text-center text-sm text-ink-muted">No products found. Try a different search or category.</Card>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {products.map((p) => (
-            <li key={p.id}>
-              <Link href={`/portal/catalogue/${encodeURIComponent(p.sku)}`} className="group block h-full">
-                <Card className="flex h-full flex-col overflow-hidden transition-colors group-hover:border-brand-500">
-                  <ProductImage src={p.imageUrl} name={p.name} className="aspect-[4/3] w-full text-3xl" />
+          {products.map((p) => {
+            const pp = prices.get(p.id)!;
+            const r = pp.at(p.moq);
+            const status = stockStatus(availableOf(p.stock), p.lowStockThreshold);
+            const href = `/portal/catalogue/${encodeURIComponent(p.sku)}`;
+            return (
+              <li key={p.id}>
+                <Card className="flex h-full flex-col overflow-hidden transition-colors hover:border-brand-500">
+                  <Link href={href} tabIndex={-1} aria-hidden>
+                    <ProductImage src={p.imageUrl} name={p.name} className="aspect-[4/3] w-full text-3xl" />
+                  </Link>
                   <div className="flex flex-1 flex-col gap-1 p-4">
                     {p.brand && <div className="text-xs font-medium uppercase tracking-wide text-ink-muted">{p.brand}</div>}
-                    <div className="font-medium leading-snug group-hover:text-brand-700">{p.name}</div>
+                    <Link href={href} className="font-medium leading-snug hover:text-brand-700">
+                      {p.name}
+                    </Link>
                     <div className="text-xs text-ink-muted">
                       {p.sellUnit}
                       {p.moq > 1 && ` · min ${p.moq}`}
                     </div>
                     <div className="mt-auto space-y-2 pt-3">
-                      {(() => {
-                        const pp = prices.get(p.id)!;
-                        const r = pp.at(p.moq);
-                        return (
-                          <PriceTag
-                            unitCents={r.unitCents}
-                            baseCents={r.baseCents}
-                            label={r.label}
-                            sellUnit={p.sellUnit.split(" ")[0]}
-                            vatPercent={pp.vatPercent}
-                            currency={pricer.currency}
-                            fcccSavingPercent={pp.fccc?.savingPercent}
-                          />
-                        );
-                      })()}
-                      <StockBadge status={stockStatus(availableOf(p.stock), p.lowStockThreshold)} />
+                      <PriceTag
+                        unitCents={r.unitCents}
+                        baseCents={r.baseCents}
+                        label={r.label}
+                        sellUnit={p.sellUnit.split(" ")[0]}
+                        vatPercent={pp.vatPercent}
+                        currency={pricer.currency}
+                        fcccSavingPercent={pp.fccc?.savingPercent}
+                      />
+                      <StockBadge status={status} />
+                      {canOrder && (
+                        <AddToCart action={addToCartAction.bind(null, p.id)} moq={p.moq} multiple={p.orderMultiple} disabled={status === "out"} compact />
+                      )}
                     </div>
                   </div>
                 </Card>
-              </Link>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 

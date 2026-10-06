@@ -8,12 +8,17 @@ const nav: { href: string; label: string; capability: StaffCapability; exact?: b
   { href: "/admin", label: "Overview", capability: "companies.view", exact: true },
   { href: "/admin/applications", label: "Applications", capability: "companies.approve" },
   { href: "/admin/companies", label: "Customers", capability: "companies.view" },
+  { href: "/admin/orders", label: "Orders", capability: "orders.view" },
+  { href: "/admin/approvals", label: "Price approvals", capability: "prices.approve" },
+  { href: "/admin/payments", label: "Payments", capability: "payments.verify" },
   { href: "/admin/catalogue", label: "Catalogue", capability: "catalogue.view" },
   { href: "/admin/pricing", label: "Pricing", capability: "settings.pricing" },
   { href: "/admin/pricing/check", label: "Price check", capability: "pricing.check" },
   { href: "/admin/staff", label: "Staff", capability: "staff.manage" },
   { href: "/admin/settings/regions", label: "Regions", capability: "settings.pricing" },
   { href: "/admin/settings/tiers", label: "Tiers", capability: "settings.pricing" },
+  { href: "/admin/settings/payments", label: "Payment details", capability: "settings.payments" },
+  { href: "/admin/settings/messages", label: "Messages", capability: "settings.messages" },
   { href: "/admin/audit", label: "Audit log", capability: "audit.view" },
 ];
 
@@ -39,7 +44,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
       </aside>
       <div className="flex flex-1 flex-col">
         <header className="flex justify-end border-b border-line bg-surface px-6 py-3">
-          <UserMenu name={user.name} subtitle={staffRoleLabels[user.staffRole!]} />
+          <UserMenu userId={user.id} area="admin" name={user.name} subtitle={staffRoleLabels[user.staffRole!]} />
         </header>
         <main className="flex-1 px-4 py-8 md:px-8">{children}</main>
       </div>

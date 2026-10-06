@@ -306,3 +306,76 @@ export const exchangeRateSchema = z.object({
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, { error: "Use a 3-letter currency code." }),
   perFjd: z.coerce.number().positive({ error: "Enter a positive rate." }),
 });
+
+// ─── Cart & orders ───────────────────────────────────────────────────────────
+
+export const qtySchema = z.coerce.number({ error: "Enter a quantity." }).int({ error: "Use whole units." }).min(0).max(100_000);
+
+export const cartDetailsSchema = z
+  .object({
+    delivery: z.string().min(1, { error: "Choose delivery or pickup." }),
+    poNumber: optionalText(),
+    notes: optionalText(),
+    requestedDate: optionalDate(),
+  })
+  .transform((v) => ({
+    pickup: v.delivery === "pickup",
+    addressId: v.delivery === "pickup" ? null : v.delivery,
+    poNumber: v.poNumber ?? null,
+    notes: v.notes ?? null,
+    requestedDate: v.requestedDate,
+  }));
+
+export const paymentMethodSchema = z.enum(["ON_ACCOUNT", "BANK_DEPOSIT", "MPAISA", "MYCASH"], { error: "Choose a payment method." });
+
+export const submitPaymentSchema = z.object({
+  method: z.enum(["BANK_DEPOSIT", "MPAISA", "MYCASH"], { error: "Choose how you paid." }),
+  amount: moneySchema.refine((v) => v > 0, { error: "Enter the amount paid." }),
+  reference: trimmed().min(3, { error: "Enter the transaction / receipt reference." }).max(100),
+});
+
+export const reasonSchema = z.object({ reason: trimmed().min(3, { error: "Give a reason." }).max(1000) });
+
+export const overrideSchema = z.object({
+  price: optionalMoney,
+  reason: optionalText(),
+});
+
+export const paymentSettingsSchema = z.object({
+  bankName: z.string().trim().max(100).default(""),
+  accountName: z.string().trim().max(100).default(""),
+  accountNumber: z.string().trim().max(50).default(""),
+  branch: z.string().trim().max(100).default(""),
+  swift: z.string().trim().max(20).default(""),
+  mpaisaNumber: z.string().trim().max(30).default(""),
+  mycashNumber: z.string().trim().max(30).default(""),
+  note: z.string().trim().max(1000).default(""),
+});
+
+// ─── Profile & notifications ─────────────────────────────────────────────────
+
+export const profileSchema = z.object({
+  name: trimmed().min(2, { error: "Enter your name." }).max(100),
+  phone: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/[\s()-]/g, ""))
+    .refine((v) => v === "" || /^\+\d{7,15}$/.test(v), { error: "Use international format, e.g. +679 123 4567." })
+    .transform((v) => v || null),
+});
+
+export const changePasswordSchema = z
+  .object({ currentPassword: z.string().min(1, { error: "Enter your current password." }), password: passwordSchema, confirmPassword: z.string() })
+  .refine((d) => d.password === d.confirmPassword, { error: "Passwords don't match.", path: ["confirmPassword"] });
+
+export const forgotPasswordSchema = z.object({ email: emailSchema });
+
+export const templateSchema = z.object({
+  subject: trimmed().min(2).max(200),
+  body: trimmed().min(2).max(5000),
+});
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({ p256dh: z.string().min(10).max(500), auth: z.string().min(5).max(500) }),
+});

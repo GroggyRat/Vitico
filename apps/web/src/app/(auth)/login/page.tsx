@@ -24,7 +24,9 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             Apply for an account
           </Link>
           <br />
-          Forgot your password? Contact your VITICO sales rep for a reset link.
+          <Link href="/forgot-password" className="font-medium text-brand-700 hover:underline">
+            Forgot your password?
+          </Link>
         </p>
       </CardBody>
     </Card>

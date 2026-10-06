@@ -59,7 +59,7 @@ test("a new customer applies, is approved, and onboards a buyer", async ({ page 
   await page.getByLabel("Confirm password").fill("tomasi-pass-1");
   await page.getByRole("button", { name: "Set password and sign in" }).click();
   await expect(page).toHaveURL(/\/portal$/);
-  await expect(page.getByRole("link", { name: "Team" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Team", exact: true })).toHaveCount(0);
   await page.goto("/portal/team");
   await expect(page.getByText(/could not be found/i)).toBeVisible();
 
