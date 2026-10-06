@@ -139,21 +139,21 @@ export async function ContainerBuilder({ buildId, access, base }: { buildId: str
             <CardHeader title="Summary" />
             <CardBody>
               <dl className="space-y-1 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <dt className="text-ink-muted">Cartons</dt>
-                  <dd className="tabular-nums">{priced.lines.reduce((s, l) => s + l.qty, 0).toLocaleString()}</dd>
+                  <dd className="whitespace-nowrap tabular-nums">{priced.lines.reduce((s, l) => s + l.qty, 0).toLocaleString()}</dd>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <dt className="text-ink-muted">Subtotal</dt>
-                  <dd className="tabular-nums">{formatCents(priced.subtotalCents)}</dd>
+                  <dd className="whitespace-nowrap tabular-nums">{formatCents(priced.subtotalCents)}</dd>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <dt className="text-ink-muted">{priced.isExport ? "VAT (export, 0%)" : "VAT 15%"}</dt>
-                  <dd className="tabular-nums">{formatCents(priced.vatTotalCents)}</dd>
+                  <dd className="whitespace-nowrap tabular-nums">{formatCents(priced.vatTotalCents)}</dd>
                 </div>
-                <div className="flex justify-between border-t border-line pt-1 text-base font-semibold">
+                <div className="flex justify-between gap-4 border-t border-line pt-1 text-base font-semibold">
                   <dt>Total</dt>
-                  <dd className="tabular-nums">{formatCents(priced.totalCents)}</dd>
+                  <dd className="whitespace-nowrap tabular-nums">{formatCents(priced.totalCents)}</dd>
                 </div>
               </dl>
             </CardBody>

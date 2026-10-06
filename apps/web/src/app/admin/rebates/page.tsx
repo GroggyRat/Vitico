@@ -33,7 +33,7 @@ export default async function RebatesAdminPage({ searchParams }: PageProps<"/adm
         title="Rebates"
         description={`Outstanding rebate liability (available + pending): ${formatFJD(liability._sum.remaining ?? 0)}`}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link href="/admin/settings/tiers" className={buttonClass("secondary")}>
               Tier suggestions
             </Link>

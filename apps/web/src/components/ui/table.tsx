@@ -1,9 +1,12 @@
 import { cn } from "@/lib/cn";
+import { StackLabels } from "./stack-labels";
 
-export function Table({ className, ...props }: React.ComponentProps<"table">) {
+/** A data table. On phones each row becomes a card of "label: value" lines unless stack is false. */
+export function Table({ className, stack = true, ...props }: React.ComponentProps<"table"> & { stack?: boolean }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" data-stack={stack ? "" : undefined}>
       <table className={cn("w-full text-left text-sm", className)} {...props} />
+      {stack && <StackLabels />}
     </div>
   );
 }

@@ -6,12 +6,12 @@ export function UserMenu({ userId, name, subtitle, area }: { userId: string; nam
   return (
     <div className="flex items-center gap-2">
       <NotificationBell userId={userId} href={`/${area}/notifications`} />
-      <Link href={`/${area}/profile`} className="rounded-md px-2 py-1 text-right leading-tight hover:bg-canvas">
+      <Link href={`/${area}/profile`} className="hidden rounded-md px-2 py-1 text-right leading-tight hover:bg-canvas sm:block">
         <div className="text-sm font-medium text-ink">{name}</div>
         <div className="text-xs text-ink-muted">{subtitle}</div>
       </Link>
       <form action={logoutAction}>
-        <button type="submit" className="rounded-md px-2 py-1 text-sm text-ink-muted hover:bg-canvas hover:text-ink">
+        <button type="submit" className="whitespace-nowrap rounded-md px-2 py-1 text-sm text-ink-muted hover:bg-canvas hover:text-ink">
           Sign out
         </button>
       </form>

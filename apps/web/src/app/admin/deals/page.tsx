@@ -30,7 +30,7 @@ export default async function DealsPage() {
         title="Deal Drops"
         description="Time-limited bundles at a set price. Customers secure units with a non-refundable bond and complete the purchase later."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {staffCan(user.staffRole, "payments.verify") && (
               <Link href="/admin/deals/bonds" className={buttonClass("secondary")}>
                 Bonds to verify ({pendingBonds})

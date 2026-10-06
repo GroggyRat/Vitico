@@ -52,17 +52,17 @@ export function SecureDealForm({
         </Field>
       )}
       <dl className="space-y-1 rounded-md bg-canvas px-4 py-3 text-sm">
-        <div className="flex justify-between">
+        <div className="flex justify-between gap-4">
           <dt className="text-ink-muted">Deal value incl. VAT</dt>
-          <dd className="tabular-nums">{fmt(value)}</dd>
+          <dd className="whitespace-nowrap tabular-nums">{fmt(value)}</dd>
         </div>
-        <div className="flex justify-between font-medium">
+        <div className="flex justify-between gap-4 font-medium">
           <dt>Bond now ({bondPercent}%, non-refundable)</dt>
-          <dd className="tabular-nums">{fmt(bond)}</dd>
+          <dd className="whitespace-nowrap tabular-nums">{fmt(bond)}</dd>
         </div>
-        <div className="flex justify-between text-ink-muted">
+        <div className="flex justify-between gap-4 text-ink-muted">
           <dt>Left to pay when you complete</dt>
-          <dd className="tabular-nums">{fmt(value - bond)}</dd>
+          <dd className="whitespace-nowrap tabular-nums">{fmt(value - bond)}</dd>
         </div>
       </dl>
       <SubmitButton>Secure units</SubmitButton>

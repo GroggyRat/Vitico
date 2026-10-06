@@ -63,7 +63,7 @@ export default async function ProductPage({ params }: PageProps<"/portal/catalog
       </div>
       <div className="grid gap-8 lg:grid-cols-2">
         <Card className="overflow-hidden">
-          <ProductImage src={product.imageUrl} name={product.name} className="aspect-square w-full text-6xl" />
+          <ProductImage src={product.imageUrl} name={product.name} className="aspect-[3/2] w-full sm:aspect-square" />
         </Card>
         <div className="space-y-6">
           <div>

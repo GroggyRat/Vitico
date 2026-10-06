@@ -46,7 +46,7 @@ export default async function CompanyPage({ params, searchParams }: PageProps<"/
         title={company.name}
         description={company.approvedAt ? `Approved ${formatDate(company.approvedAt)} by ${company.approvedBy?.name ?? "-"}` : undefined}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Badge tone={companyStatusTone[company.status]}>{companyStatusLabel[company.status]}</Badge>
             {canEdit && company.status === CompanyStatus.ACTIVE && (
               <ActionButton
