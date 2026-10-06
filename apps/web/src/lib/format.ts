@@ -24,3 +24,12 @@ export function formatUplift(type: string, value: DecimalLike): string {
   if (type === "NONE") return "—";
   return type === "PERCENT" ? `+${Number(value)}%` : `+${formatFJD(value)} / unit`;
 }
+
+export function formatCents(cents: number): string {
+  return fjd.format(cents / 100);
+}
+
+/** Indicative foreign-currency amount, e.g. "≈ WS$115.20". */
+export function formatForeign(amount: number, currency: string): string {
+  return `≈ ${new Intl.NumberFormat("en", { style: "currency", currency, currencyDisplay: "narrowSymbol" }).format(amount)}`;
+}

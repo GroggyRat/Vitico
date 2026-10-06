@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PriceTag } from "@/components/catalogue/price-tag";
 import { ProductImage } from "@/components/catalogue/product-image";
 import { StockBadge } from "@/components/catalogue/stock-badge";
-import { Card, CardBody } from "@/components/ui/card";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { requireCustomer } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db";
+import { formatCents, formatDate } from "@/lib/format";
+import { createPricer } from "@/server/services/pricing";
 import { availableOf, stockStatus } from "@/server/services/stock";
 
 export async function generateMetadata({ params }: PageProps<"/portal/catalogue/[sku]">): Promise<Metadata> {
@@ -15,13 +18,26 @@ export async function generateMetadata({ params }: PageProps<"/portal/catalogue/
 }
 
 export default async function ProductPage({ params }: PageProps<"/portal/catalogue/[sku]">) {
-  await requireCustomer();
+  const { actor } = await requireCustomer();
   const { sku } = await params;
-  const product = await getDb().product.findFirst({
+  const db = getDb();
+  const product = await db.product.findFirst({
     where: { sku: decodeURIComponent(sku), active: true, category: { active: true } },
     include: { category: true, stock: true },
   });
   if (!product) notFound();
+  const pricer = await createPricer(db, { companyId: actor.companyId });
+  const pricing = (await pricer.forProducts([product])).get(product.id)!;
+  const atMoq = pricing.at(product.moq);
+  const fccc = pricing.fccc;
+  // Only show volume tiers that actually beat the customer's price at MOQ.
+  const ladder = pricing.quantityBreaks.filter((b) => b.minQty > product.moq && b.unitCents < atMoq.unitCents);
+  const fcccRef = fccc
+    ? await db.fcccPrice.findFirst({
+        where: { productId: product.id, reference: fccc.reference },
+        orderBy: { effectiveFrom: "desc" },
+      })
+    : null;
   const status = stockStatus(availableOf(product.stock), product.lowStockThreshold);
 
   const facts: [string, string][] = [
@@ -54,6 +70,70 @@ export default async function ProductPage({ params }: PageProps<"/portal/catalog
               <StockBadge status={status} />
             </div>
           </div>
+          <Card>
+            <CardBody className="space-y-4">
+              <PriceTag
+                size="lg"
+                unitCents={atMoq.unitCents}
+                baseCents={atMoq.baseCents}
+                label={atMoq.label}
+                sellUnit={product.sellUnit}
+                vatPercent={pricing.vatPercent}
+                currency={pricer.currency}
+                fcccSavingPercent={fccc?.savingPercent}
+              />
+              {atMoq.label.includes(" · ") && <p className="text-xs text-ink-muted">{atMoq.label}</p>}
+              {atMoq.nextBreak && (
+                <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700">
+                  Order {atMoq.nextBreak.minQty}+ to pay {formatCents(atMoq.nextBreak.unitCents)} each.
+                </p>
+              )}
+            </CardBody>
+          </Card>
+          {ladder.length > 0 && (
+            <Card>
+              <CardHeader title="Volume pricing" />
+              <table className="w-full text-sm">
+                <tbody>
+                  {[{ minQty: product.moq, unitCents: atMoq.unitCents }, ...ladder].map((b, i, all) => (
+                    <tr key={b.minQty} className="border-t border-line first:border-t-0">
+                      <td className="px-5 py-2">
+                        {b.minQty}
+                        {all[i + 1] ? `–${all[i + 1].minQty - 1}` : "+"} units
+                      </td>
+                      <td className="px-5 py-2 text-right font-medium tabular-nums">{formatCents(b.unitCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+          {fccc && (
+            <Card>
+              <CardHeader title="FCCC price comparison" />
+              <CardBody className="space-y-1 text-sm">
+                <p>
+                  FCCC {fcccRef?.basis === "PER_SELL_UNIT" ? "price per unit" : "price per item"}: <strong>{formatCents(fccc.fcccCents)}</strong>
+                  {fcccRef?.vatInclusive ? " (incl. VAT)" : ""}
+                </p>
+                <p>
+                  Your equivalent: <strong>{formatCents(fccc.viticoCents)}</strong>
+                  {fccc.savingCents > 0 && (
+                    <span className="text-emerald-700">
+                      {" "}
+                      — {formatCents(fccc.savingCents)} ({fccc.savingPercent}%) below
+                    </span>
+                  )}
+                </p>
+                {fcccRef && (
+                  <p className="text-xs text-ink-muted">
+                    {fcccRef.reference && `${fcccRef.reference} · `}Effective {formatDate(fcccRef.effectiveFrom)}
+                    {fcccRef.expiresAt && `, until ${formatDate(fcccRef.expiresAt)}`}
+                  </p>
+                )}
+              </CardBody>
+            </Card>
+          )}
           {product.description && <p className="whitespace-pre-line text-sm text-ink">{product.description}</p>}
           <Card>
             <CardBody>

@@ -63,8 +63,8 @@ model User {
 
   sessions          Session[]
   authTokens        AuthToken[]
-  assignedCompanies Company[]   @relation("SalesRepCompanies")
-  approvedCompanies Company[]   @relation("CompanyApprover")
+  assignedCompanies Company[]       @relation("SalesRepCompanies")
+  approvedCompanies Company[]       @relation("CompanyApprover")
   auditLogs         AuditLog[]
   stockMovements    StockMovement[]
 
@@ -146,8 +146,9 @@ model Company {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  users     User[]    @relation("CompanyUsers")
-  addresses Address[]
+  users          User[]          @relation("CompanyUsers")
+  addresses      Address[]
+  contractPrices ContractPrice[]
 
   @@index([status])
   @@index([salesRepId])
@@ -197,8 +198,10 @@ model Region {
   active      Boolean    @default(true)
   sortOrder   Int        @default(0)
 
-  companies Company[]
-  addresses Address[]
+  companies      Company[]
+  addresses      Address[]
+  contractPrices ContractPrice[]
+  fcccPrices     FcccPrice[]
 }
 
 model Tier {
@@ -209,7 +212,8 @@ model Tier {
   discountPercent Decimal @default(0) @db.Decimal(5, 2)
   sortOrder       Int     @default(0)
 
-  companies Company[]
+  companies  Company[]
+  tierPrices TierPrice[]
 }
 
 // ─── Audit ───────────────────────────────────────────────────────────────────
@@ -253,38 +257,43 @@ enum VatCategory {
 
 /// A sellable item. Quantities and prices are per *sell unit* (usually a carton).
 model Product {
-  id             String      @id @default(cuid())
-  sku            String      @unique
-  barcode        String?
-  name           String
-  brand          String?
-  description    String?
-  categoryId     String
-  category       Category    @relation(fields: [categoryId], references: [id])
+  id                String      @id @default(cuid())
+  sku               String      @unique
+  barcode           String?
+  name              String
+  brand             String?
+  description       String?
+  categoryId        String
+  category          Category    @relation(fields: [categoryId], references: [id])
   /// What one sell unit is, e.g. "Carton of 24 × 400g".
-  sellUnit       String      @default("Carton")
-  unitsPerCarton Int         @default(1)
+  sellUnit          String      @default("Carton")
+  unitsPerCarton    Int         @default(1)
   /// Minimum sell units per order line.
-  moq            Int         @default(1)
+  moq               Int         @default(1)
   /// Quantities must be a multiple of this.
-  orderMultiple  Int         @default(1)
-  cartonCbm      Decimal     @default(0) @db.Decimal(10, 4)
-  cartonWeightKg Decimal     @default(0) @db.Decimal(10, 3)
+  orderMultiple     Int         @default(1)
+  cartonCbm         Decimal     @default(0) @db.Decimal(10, 4)
+  cartonWeightKg    Decimal     @default(0) @db.Decimal(10, 3)
   /// FJD per sell unit, excluding VAT.
-  basePrice      Decimal     @db.Decimal(12, 2)
+  basePrice         Decimal     @db.Decimal(12, 2)
   /// Landed cost per sell unit; used for margin checks. Never shown to customers.
-  costPrice      Decimal?    @db.Decimal(12, 2)
-  vatCategory    VatCategory @default(STANDARD)
-  imageUrl       String?
-  tags           String[]    @default([])
-  active         Boolean     @default(true)
+  costPrice         Decimal?    @db.Decimal(12, 2)
+  vatCategory       VatCategory @default(STANDARD)
+  imageUrl          String?
+  tags              String[]    @default([])
+  active            Boolean     @default(true)
   /// Available below this many sell units shows as "low stock".
-  lowStockThreshold Int      @default(10)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  lowStockThreshold Int         @default(10)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  stock     StockLevel?
-  movements StockMovement[]
+  stock          StockLevel?
+  movements      StockMovement[]
+  contractPrices ContractPrice[]
+  tierPrices     TierPrice[]
+  quantityBreaks QuantityBreak[]
+  promotions     PromotionProduct[]
+  fcccPrices     FcccPrice[]
 
   @@index([categoryId])
   @@index([active])
@@ -338,4 +347,127 @@ model StockMovement {
 
   @@index([productId, createdAt])
   @@index([refType, refId])
+}
+
+// ─── Pricing ─────────────────────────────────────────────────────────────────
+
+enum AdjustmentKind {
+  PERCENT_OFF
+  FIXED_PRICE
+}
+
+/// Negotiated price for one customer and product (SPEC §5.1).
+model ContractPrice {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price       Decimal   @db.Decimal(12, 2)
+  /// Only when delivering to this region (or its children). Region-specific prices skip the region uplift.
+  regionId    String?
+  region      Region?   @relation(fields: [regionId], references: [id])
+  minQty      Int       @default(1)
+  validFrom   DateTime?
+  validTo     DateTime?
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([companyId, productId])
+}
+
+/// Per-product price for a tier, overriding the tier's default discount.
+model TierPrice {
+  tierId    String
+  tier      Tier    @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price     Decimal @db.Decimal(12, 2)
+
+  @@id([tierId, productId])
+}
+
+model QuantityBreak {
+  id        String         @id @default(cuid())
+  productId String
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  minQty    Int
+  kind      AdjustmentKind
+  /// Percent off base, or the fixed FJD unit price.
+  value     Decimal        @db.Decimal(12, 2)
+
+  @@unique([productId, minQty])
+}
+
+model Promotion {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  kind        AdjustmentKind
+  value       Decimal        @db.Decimal(12, 2)
+  minQty      Int            @default(1)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  active      Boolean        @default(true)
+  /// Empty = every tier / region.
+  tierIds     String[]       @default([])
+  regionIds   String[]       @default([])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  products PromotionProduct[]
+}
+
+model PromotionProduct {
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, productId])
+  @@index([productId])
+}
+
+enum FcccBasis {
+  PER_ITEM
+  PER_SELL_UNIT
+}
+
+/// FCCC controlled / reference price for a product (SPEC §6).
+model FcccPrice {
+  id            String    @id @default(cuid())
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Null = applies across Fiji.
+  regionId      String?
+  region        Region?   @relation(fields: [regionId], references: [id])
+  price         Decimal   @db.Decimal(12, 2)
+  basis         FcccBasis @default(PER_ITEM)
+  vatInclusive  Boolean   @default(true)
+  effectiveFrom DateTime
+  expiresAt     DateTime?
+  /// Gazette / order reference.
+  reference     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([productId])
+}
+
+/// Indicative FX for showing export customers local-currency prices. Billing is always FJD.
+model ExchangeRate {
+  currency  String   @id @db.Char(3)
+  /// Units of `currency` per 1 FJD.
+  perFjd    Decimal  @db.Decimal(18, 6)
+  source    String
+  updatedAt DateTime @updatedAt
+}
+
+/// Small key/value store for admin-editable settings (e.g. pricing priority).
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }
