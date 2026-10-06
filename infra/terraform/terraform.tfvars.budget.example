@@ -1,0 +1,27 @@
+# Budget mode: for trying VITICO on AWS free-plan credits.
+# Roughly US$55 to 65 a month (load balancer, two small tasks, a micro database, public IPs).
+# Not for production: one database copy, no NAT gateway, 1 web task.
+environment     = "staging"
+domain_name     = "app.example.com"
+certificate_arn = "arn:aws:acm:ap-southeast-2:111111111111:certificate/..."
+email_domain    = "example.com"
+email_from      = "VITICO Wholesale <orders@example.com>"
+alarm_email     = "you@example.com"
+
+# Leave empty until the GitHub deploy step.
+github_repository = "GroggyRat/Vitico"
+
+use_nat_gateway         = false
+container_insights      = false
+db_instance_class       = "db.t4g.micro"
+db_allocated_storage    = 20
+db_multi_az             = false
+db_performance_insights = false
+db_backup_days          = 1
+web_cpu                 = 256
+web_memory              = 512
+web_min_count           = 1
+web_max_count           = 2
+worker_cpu              = 256
+worker_memory           = 512
+monthly_budget_usd      = 60

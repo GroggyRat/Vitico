@@ -40,7 +40,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids       = [aws_security_group.db.id]
   multi_az                     = var.db_multi_az
   publicly_accessible          = false
-  backup_retention_period      = 14
+  backup_retention_period      = var.db_backup_days
   backup_window                = "14:00-15:00" # 02:00 to 03:00 Fiji time
   maintenance_window           = "sun:15:00-sun:16:00"
   auto_minor_version_upgrade   = true
@@ -48,7 +48,7 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot          = false
   final_snapshot_identifier    = "${local.name}-final"
   copy_tags_to_snapshot        = true
-  performance_insights_enabled = true
+  performance_insights_enabled = var.db_performance_insights
 }
 
 # ─── Uploads (payment receipts) ──────────────────────────────────────────────

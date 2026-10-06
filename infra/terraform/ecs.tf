@@ -31,11 +31,14 @@ resource "aws_ecs_cluster" "main" {
   name = local.name
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = var.container_insights ? "enabled" : "disabled"
   }
 }
 
 locals {
+  # Without a NAT gateway, tasks need public IPs to reach ECR, Secrets Manager, SES and Odoo.
+  task_subnets = var.use_nat_gateway ? aws_subnet.private[*].id : aws_subnet.public[*].id
+
   image = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
 
   environment = [
@@ -97,8 +100,8 @@ resource "aws_ecs_task_definition" "worker" {
   family                   = "${local.name}-worker"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = var.worker_cpu
+  memory                   = var.worker_memory
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.task.arn
   runtime_platform {
@@ -149,9 +152,9 @@ resource "aws_ecs_service" "web" {
   enable_execute_command            = true
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = local.task_subnets
     security_groups  = [aws_security_group.app.id]
-    assign_public_ip = false
+    assign_public_ip = !var.use_nat_gateway
   }
 
   load_balancer {
@@ -181,9 +184,9 @@ resource "aws_ecs_service" "worker" {
   enable_execute_command = true
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = local.task_subnets
     security_groups  = [aws_security_group.app.id]
-    assign_public_ip = false
+    assign_public_ip = !var.use_nat_gateway
   }
 
   deployment_circuit_breaker {

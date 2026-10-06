@@ -134,3 +134,43 @@ variable "odoo_db" {
   type    = string
   default = ""
 }
+
+# ─── Cost controls (see terraform.tfvars.budget.example) ─────────────────────
+
+variable "use_nat_gateway" {
+  description = "true: tasks run in private subnets behind a NAT gateway (~US$35/month). false: tasks get public IPs in public subnets; their security group still only accepts traffic from the load balancer."
+  type        = bool
+  default     = true
+}
+
+variable "container_insights" {
+  description = "Detailed ECS metrics in CloudWatch (extra cost)."
+  type        = bool
+  default     = true
+}
+
+variable "db_performance_insights" {
+  type    = bool
+  default = true
+}
+
+variable "db_backup_days" {
+  type    = number
+  default = 14
+}
+
+variable "worker_cpu" {
+  type    = number
+  default = 256
+}
+
+variable "worker_memory" {
+  type    = number
+  default = 512
+}
+
+variable "monthly_budget_usd" {
+  description = "Emails alarm_email when actual or forecast monthly spend passes 50%, 80% and 100% of this. 0 turns the budget off."
+  type        = number
+  default     = 0
+}

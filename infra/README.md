@@ -77,6 +77,24 @@ aws ecs run-task --cluster vitico-prod --task-definition vitico-prod-migrate --l
   --query 'services[0].networkConfiguration' --output json)"
 ```
 
+## Budget mode (trial accounts and staging)
+
+Start from `terraform/terraform.tfvars.budget.example` instead. It drops the NAT gateway (tasks get
+public IPs; their security group still only accepts the load balancer), uses one web task, a
+single `db.t4g.micro` database, no Container Insights or Performance Insights, and sets a monthly
+budget alert. Expect about US$55 to 65 a month.
+
+To pause while you're not testing (the load balancer, IPs and storage still cost a little):
+
+```bash
+aws ecs update-service --cluster vitico-staging --service vitico-staging-web --desired-count 0
+aws ecs update-service --cluster vitico-staging --service vitico-staging-worker --desired-count 0
+aws rds stop-db-instance --db-instance-identifier vitico-staging   # AWS restarts it after 7 days
+```
+
+Resume with `aws rds start-db-instance ...`, then set the desired counts back to 1.
+`terraform destroy` removes everything (turn off `deletion_protection` on the database first).
+
 ## Costs to know about
 
 The biggest fixed costs are the Multi-AZ database, the NAT gateway and the load balancer. For a
