@@ -111,6 +111,24 @@ export const TEMPLATES = {
     body: "We couldn't confirm your payment for order {{order}}: {{reason}}. Please check and submit it again.",
     vars: ["order", "reason"],
   },
+  "rebate.earned": {
+    category: "rebates",
+    subject: "You've earned {{amount}} in rebates",
+    body: "{{description}}: {{amount}} has been added to your rebate wallet. Use it on your next order.",
+    vars: ["amount", "description"],
+  },
+  "rebate.expiring": {
+    category: "rebates",
+    subject: "{{amount}} of rebates expire in 7 days",
+    body: "Use your {{amount}} rebate balance on an order in the next 7 days before it expires.",
+    vars: ["amount"],
+  },
+  "staff.rebate_review": {
+    category: "staff",
+    subject: "Contract rebate to review: {{company}}",
+    body: "{{company}}'s contract rebate for {{period}} is {{amount}}. Approve it to add it to their wallet.",
+    vars: ["company", "amount", "period"],
+  },
 } satisfies Record<string, TemplateDef>;
 
 export type TemplateType = keyof typeof TEMPLATES;

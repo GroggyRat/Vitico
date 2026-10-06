@@ -8,6 +8,8 @@ import Link from "next/link";
 import { OrderStatusBadge } from "@/components/orders/order-parts";
 import { formatCents, formatDate, formatFJD } from "@/lib/format";
 import { creditAvailable } from "@/server/orders/orders";
+import { TargetProgress } from "@/components/rebates/target-progress";
+import { spendTargetProgress, totalSavings, walletBalance } from "@/server/rebates/service";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -35,9 +37,12 @@ export default async function PortalDashboard() {
     },
   });
   const address = company.addresses[0];
-  const [credit, recent] = await Promise.all([
+  const [credit, recent, wallet, targets, savings] = await Promise.all([
     creditAvailable(getDb(), company.id),
     getDb().order.findMany({ where: { companyId: company.id }, orderBy: { createdAt: "desc" }, take: 5 }),
+    walletBalance(getDb(), company.id),
+    spendTargetProgress(getDb(), company),
+    totalSavings(getDb(), company.id),
   ]);
   const seesFinance = companyCan(actor.companyRole, "finance.view");
 
@@ -63,6 +68,30 @@ export default async function PortalDashboard() {
           <Stat label="Payment terms" value={company.paymentTermsDays ? `${company.paymentTermsDays} days` : "Pay before dispatch"} />
         )}
       </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Link href="/portal/rebates" className="block">
+          <Stat
+            label="Rebate wallet"
+            value={formatCents(wallet.availableCents)}
+            note={wallet.pendingCents > 0 ? `+ ${formatCents(wallet.pendingCents)} pending` : "Use it at checkout"}
+          />
+        </Link>
+        <Stat
+          label="You've saved with VITICO"
+          value={formatCents(savings.discountCents + savings.rebateCents)}
+          note={`${formatCents(savings.discountCents)} off list prices · ${formatCents(savings.rebateCents)} in rebates`}
+        />
+      </div>
+
+      {targets.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader title="Volume rebate progress" />
+          <CardBody>
+            <TargetProgress items={targets} />
+          </CardBody>
+        </Card>
+      )}
 
       <Card className="mt-6">
         <CardHeader

@@ -13,6 +13,7 @@ const nav: { href: string; label: string; capability: StaffCapability; exact?: b
   { href: "/admin/payments", label: "Payments", capability: "payments.verify" },
   { href: "/admin/catalogue", label: "Catalogue", capability: "catalogue.view" },
   { href: "/admin/pricing", label: "Pricing", capability: "settings.pricing" },
+  { href: "/admin/rebates", label: "Rebates", capability: "rebates.manage" },
   { href: "/admin/pricing/check", label: "Price check", capability: "pricing.check" },
   { href: "/admin/staff", label: "Staff", capability: "staff.manage" },
   { href: "/admin/settings/regions", label: "Regions", capability: "settings.pricing" },

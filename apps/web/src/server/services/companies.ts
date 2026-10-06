@@ -145,3 +145,14 @@ export async function setCompanySuspended(db: Db, actor: StaffActor, companyId: 
     });
   });
 }
+
+export async function changeTier(db: Db, actor: StaffActor, companyId: string, tierId: string) {
+  if (!staffCan(actor.staffRole, "companies.edit")) throw new ServiceError("You can't change tiers.");
+  await db.$transaction(async (tx) => {
+    const company = await tx.company.findUnique({ where: { id: companyId }, include: { tier: true } });
+    const tier = await tx.tier.findUnique({ where: { id: tierId } });
+    if (!company || !tier) throw new ServiceError("Not found.");
+    await tx.company.update({ where: { id: companyId }, data: { tierId } });
+    await audit(tx, { actorId: actor.id, action: "company.tier_changed", entityType: "Company", entityId: companyId, data: { from: company.tier.code, to: tier.code } });
+  });
+}

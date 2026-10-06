@@ -55,7 +55,19 @@ export function OrderLines({ lines, showCalculated }: { lines: Line[]; showCalcu
   );
 }
 
-export function OrderTotals({ subtotal, vat, total, isExport }: { subtotal: Prisma.Decimal | number; vat: Prisma.Decimal | number; total: Prisma.Decimal | number; isExport: boolean }) {
+export function OrderTotals({
+  subtotal,
+  vat,
+  total,
+  isExport,
+  rebate = 0,
+}: {
+  subtotal: Prisma.Decimal | number;
+  vat: Prisma.Decimal | number;
+  total: Prisma.Decimal | number;
+  isExport: boolean;
+  rebate?: Prisma.Decimal | number;
+}) {
   return (
     <dl className="ml-auto w-full max-w-xs space-y-1 text-sm">
       <div className="flex justify-between">
@@ -70,6 +82,18 @@ export function OrderTotals({ subtotal, vat, total, isExport }: { subtotal: Pris
         <dt>Total</dt>
         <dd className="tabular-nums">{formatFJD(total)}</dd>
       </div>
+      {Number(rebate) > 0 && (
+        <>
+          <div className="flex justify-between text-brand-700">
+            <dt>Paid with rebates</dt>
+            <dd className="tabular-nums">−{formatFJD(rebate)}</dd>
+          </div>
+          <div className="flex justify-between font-semibold">
+            <dt>Amount due</dt>
+            <dd className="tabular-nums">{formatFJD(Number(total) - Number(rebate))}</dd>
+          </div>
+        </>
+      )}
     </dl>
   );
 }

@@ -34,7 +34,7 @@ export async function updateRegion(
   });
 }
 
-export async function updateTier(db: Db, actor: StaffActor, tierId: string, input: { name: string; discountPercent: number }) {
+export async function updateTier(db: Db, actor: StaffActor, tierId: string, input: { name: string; discountPercent: number; minAnnualSpend: number | null }) {
   assertPricingSettings(actor);
   await db.$transaction(async (tx) => {
     const before = await tx.tier.findUnique({ where: { id: tierId } });
@@ -45,7 +45,7 @@ export async function updateTier(db: Db, actor: StaffActor, tierId: string, inpu
       action: "tier.updated",
       entityType: "Tier",
       entityId: tierId,
-      data: { before: { name: before.name, discountPercent: before.discountPercent.toString() }, after: input },
+      data: { before: { name: before.name, discountPercent: before.discountPercent.toString(), minAnnualSpend: before.minAnnualSpend?.toString() ?? null }, after: input },
     });
   });
 }
