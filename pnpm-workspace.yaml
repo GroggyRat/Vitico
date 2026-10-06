@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+
+onlyBuiltDependencies:
+  - "@prisma/engines"
+  - "@node-rs/argon2"
+  - esbuild
+  - prisma
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
