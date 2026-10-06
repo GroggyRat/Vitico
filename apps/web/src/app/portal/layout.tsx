@@ -39,6 +39,7 @@ export default async function PortalLayout({ children }: LayoutProps<"/portal">)
           <NavLink href="/portal/catalogue" className="whitespace-nowrap">Products</NavLink>
           <NavLink href="/portal/orders" className="whitespace-nowrap">Orders</NavLink>
           {canOrder && <NavLink href="/portal/containers" className="whitespace-nowrap">Containers</NavLink>}
+          <NavLink href="/portal/deals" className="whitespace-nowrap">Deals</NavLink>
           {canOrder && <NavLink href="/portal/lists" className="whitespace-nowrap">Lists</NavLink>}
           <NavLink href="/portal/rebates" className="whitespace-nowrap">Rebates</NavLink>
           {companyCan(user.companyRole, "finance.view") && <NavLink href="/portal/statement" className="whitespace-nowrap">Statement</NavLink>}

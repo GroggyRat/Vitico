@@ -366,6 +366,55 @@ async function main() {
   }
   await db.product.updateMany({ where: { sku: "BTR-SLT-40" }, data: { containerEligible: false } });
 
+  // A live sample Deal Drop, with its stock set aside like a published deal.
+  if ((await db.dealDrop.count()) === 0) {
+    const items = [
+      { sku: "OIL-VEG-20", qtyPerDeal: 1 },
+      { sku: "RIC-LG-10X2", qtyPerDeal: 2 },
+      { sku: "TUN-OIL-48", qtyPerDeal: 1 },
+    ];
+    const totalUnits = 40;
+    const now = Date.now();
+    await db.$transaction(async (tx) => {
+      const products = await tx.product.findMany({ where: { sku: { in: items.map((i) => i.sku) } }, include: { stock: true } });
+      const deal = await tx.dealDrop.create({
+        data: {
+          name: "Pantry Starter Pack",
+          description: "Oil, rice and tuna for a busy week of trade. One pack per deal unit.",
+          state: "PUBLISHED",
+          dealPrice: 219,
+          totalUnits,
+          maxPerCustomer: 5,
+          startsAt: new Date(now - 3_600_000),
+          endsAt: new Date(now + 5 * 86_400_000),
+          publishedAt: new Date(now),
+          liveSentAt: new Date(now),
+          unitsAllocated: totalUnits,
+          createdById: admin.id,
+          items: { create: items.map((i) => ({ productId: products.find((p) => p.sku === i.sku)!.id, qtyPerDeal: i.qtyPerDeal })) },
+        },
+      });
+      for (const i of items) {
+        const p = products.find((x) => x.sku === i.sku)!;
+        const qty = i.qtyPerDeal * totalUnits;
+        const level = await tx.stockLevel.update({ where: { productId: p.id }, data: { allocated: { increment: qty } } });
+        await tx.stockMovement.create({
+          data: {
+            productId: p.id,
+            type: "ALLOCATE",
+            allocatedDelta: qty,
+            onHandAfter: level.onHand,
+            reservedAfter: level.reserved,
+            allocatedAfter: level.allocated,
+            refType: "DealDrop",
+            refId: deal.id,
+            actorId: admin.id,
+          },
+        });
+      }
+    });
+  }
+
   // Sample payment details shown to customers (replace with VITICO's real details in Admin → Payment details).
   await db.appSetting.upsert({
     where: { key: "payments" },

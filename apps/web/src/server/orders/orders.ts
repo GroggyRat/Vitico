@@ -40,10 +40,10 @@ export async function creditAvailable(db: Db | Tx, companyId: string) {
       status: { not: S.CANCELLED },
       ...(fromOdoo && { odooInvoiced: false }),
     },
-    _sum: { total: true, rebateApplied: true },
+    _sum: { total: true, rebateApplied: true, bondApplied: true },
   });
   const limitCents = toCents(company.creditLimit);
-  const openCents = toCents(open._sum.total ?? 0) - toCents(open._sum.rebateApplied ?? 0);
+  const openCents = toCents(open._sum.total ?? 0) - toCents(open._sum.rebateApplied ?? 0) - toCents(open._sum.bondApplied ?? 0);
   const usedCents = fromOdoo ? toCents(company.odooReceivable ?? 0) + openCents : openCents;
   return {
     limitCents,
@@ -216,9 +216,10 @@ export async function createOrderFromPriced(
   source: OrderSource,
   placer: Placer,
   paymentMethod: PaymentMethod,
-  opts: { rebateCents?: number; extra?: Omit<Prisma.OrderUncheckedCreateInput, "companyId" | "placedById" | "status" | "regionId" | "subtotal" | "vatTotal" | "total" | "paymentMethod"> } = {},
+  opts: { rebateCents?: number; /** Deal Drop bond already paid, deducted from what is due. */ bondCents?: number; extra?: Omit<Prisma.OrderUncheckedCreateInput, "companyId" | "placedById" | "status" | "regionId" | "subtotal" | "vatTotal" | "total" | "paymentMethod"> } = {},
 ) {
   const rebateCents = Math.max(0, Math.round(opts.rebateCents ?? 0));
+  const bondCents = Math.max(0, Math.round(opts.bondCents ?? 0));
   const { company, delivery } = source;
   if (source.lines.length === 0) throw new ServiceError("There's nothing to order.");
   if (company.status !== "ACTIVE") throw new ServiceError("This account isn't active.");
@@ -227,9 +228,9 @@ export async function createOrderFromPriced(
   if (!delivery.pickup && !delivery.address) throw new ServiceError("Choose a delivery address or pickup.");
   if (source.hasOverrides && placer.kind !== "staff") throw new ServiceError("Manual prices can only be set by VITICO staff.");
 
-  if (rebateCents > source.totalCents) throw new ServiceError("You can't use more rebate than the order total.", "rebate");
-  const dueCents = source.totalCents - rebateCents;
-  const fullyCovered = rebateCents > 0 && dueCents === 0;
+  if (rebateCents + bondCents > source.totalCents) throw new ServiceError("You can't use more rebate than the amount due.", "rebate");
+  const dueCents = source.totalCents - rebateCents - bondCents;
+  const fullyCovered = rebateCents + bondCents > 0 && dueCents === 0;
   if (paymentMethod === PaymentMethod.ON_ACCOUNT && !fullyCovered) {
     const credit = await creditAvailable(tx, company.id);
     if (credit.limitCents <= 0) throw new ServiceError("This account doesn't have credit terms. Choose another payment method.", "paymentMethod");
@@ -269,9 +270,10 @@ export async function createOrderFromPriced(
       subtotal: fromCents(source.subtotalCents),
       vatTotal: fromCents(source.vatTotalCents),
       total: fromCents(source.totalCents),
-      paymentMethod: fullyCovered ? PaymentMethod.REBATE_WALLET : paymentMethod,
+      paymentMethod: fullyCovered && rebateCents > 0 ? PaymentMethod.REBATE_WALLET : paymentMethod,
       paymentStatus: fullyCovered ? PaymentStatus.PAID : paymentMethod === PaymentMethod.ON_ACCOUNT ? PaymentStatus.ON_ACCOUNT : PaymentStatus.UNPAID,
       rebateApplied: fromCents(rebateCents),
+      bondApplied: fromCents(bondCents),
       paidAt: fullyCovered ? new Date() : null,
       submittedAt: status === S.SUBMITTED ? new Date() : null,
       lines: {
@@ -423,6 +425,8 @@ export async function cancelOrder(db: Db, actor: CustomerActor | StaffActor, ord
     if (!canTransition(order.status, S.CANCELLED)) throw new ServiceError("This order can't be cancelled.");
     if (HOLDS_STOCK.includes(order.status)) await releaseStock(tx, order, actor.id);
     await refundOrderRebate(tx, order);
+    // A Deal Drop bond is non-refundable: the reservation ends as forfeited.
+    await tx.dealReservation.updateMany({ where: { orderId: order.id, status: "COMPLETED" }, data: { status: "FORFEITED", note: `Order cancelled: ${reason}` } });
     await setStatus(tx, order, S.CANCELLED, actor.id, reason, { cancelReason: reason });
   });
 }
@@ -522,7 +526,7 @@ export async function reviewPayment(db: Db, actor: StaffActor, paymentId: string
     const all = await tx.payment.findMany({ where: { orderId: order.id } });
     const verifiedCents = all.filter((p) => p.status === PaymentRecordStatus.VERIFIED).reduce((s, p) => s + toCents(p.amount), 0);
     const pending = all.some((p) => p.status === PaymentRecordStatus.PENDING);
-    const dueCents = toCents(order.total) - toCents(order.rebateApplied);
+    const dueCents = toCents(order.total) - toCents(order.rebateApplied) - toCents(order.bondApplied);
     const paymentStatus = verifiedCents >= dueCents ? PaymentStatus.PAID : pending ? PaymentStatus.PENDING_VERIFICATION : PaymentStatus.UNPAID;
     await tx.order.update({ where: { id: order.id }, data: { paymentStatus } });
     if (paymentStatus === PaymentStatus.PAID) await onOrderPaid(tx, order.id);

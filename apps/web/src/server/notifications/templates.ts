@@ -129,6 +129,54 @@ export const TEMPLATES = {
     body: "{{company}}'s contract rebate for {{period}} is {{amount}}. Approve it to add it to their wallet.",
     vars: ["company", "amount", "period"],
   },
+  "deal.live": {
+    category: "deals",
+    subject: "New Deal Drop: {{deal}}",
+    body: "{{deal}} is live until {{ends}}. {{units}} deal units at {{price}} each, while they last. Secure yours with a {{bond}}% bond.",
+    vars: ["deal", "ends", "units", "price", "bond"],
+  },
+  "deal.ending_soon": {
+    category: "deals",
+    subject: "{{deal}} ends soon",
+    body: "{{deal}} closes at {{ends}} and {{remaining}} deal units are left.",
+    vars: ["deal", "ends", "remaining"],
+  },
+  "deal.secured": {
+    category: "deals",
+    subject: "{{units}} x {{deal}} secured",
+    body: "Your bond of {{bond}} is confirmed and {{units}} deal units are held for you. Complete the purchase by {{completeBy}} or the bond is kept.",
+    vars: ["deal", "units", "bond", "completeBy"],
+  },
+  "deal.bond_rejected": {
+    category: "deals",
+    subject: "Bond for {{deal}} not confirmed",
+    body: "We couldn't confirm your bond payment for {{deal}}: {{reason}}. The units have been released.",
+    vars: ["deal", "reason"],
+  },
+  "deal.complete_reminder": {
+    category: "deals",
+    subject: "Complete your {{deal}} purchase by {{completeBy}}",
+    body: "You have {{units}} deal units of {{deal}} held. Complete the purchase by {{completeBy}} to keep your bond of {{bond}}.",
+    vars: ["deal", "units", "bond", "completeBy"],
+  },
+  "deal.forfeited": {
+    category: "deals",
+    subject: "{{deal}} reservation ended",
+    body: "The purchase of {{units}} deal units of {{deal}} wasn't completed in time, so the reservation has ended and the bond of {{bond}} is kept.",
+    vars: ["deal", "units", "bond"],
+  },
+  "deal.cancelled": {
+    category: "deals",
+    subject: "{{deal}} has been cancelled",
+    body: "VITICO has cancelled {{deal}}. Any bond you paid ({{bond}}) has been added to your rebate wallet.",
+    vars: ["deal", "bond"],
+  },
+  "staff.bond_to_verify": {
+    category: "staff",
+    subject: "Deal bond to verify: {{company}}",
+    body: "{{company}} paid a {{amount}} bond for {{deal}} by {{method}}, reference {{reference}}. Verify it to secure their units.",
+    vars: ["company", "deal", "amount", "method", "reference"],
+  },
 } satisfies Record<string, TemplateDef>;
 
 export type TemplateType = keyof typeof TEMPLATES;

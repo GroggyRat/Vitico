@@ -10,6 +10,7 @@ const nav: { href: string; label: string; capability: StaffCapability; exact?: b
   { href: "/admin/companies", label: "Customers", capability: "companies.view" },
   { href: "/admin/orders", label: "Orders", capability: "orders.view" },
   { href: "/admin/containers", label: "Containers", capability: "orders.place_for_customer" },
+  { href: "/admin/deals", label: "Deal Drops", capability: "deals.manage" },
   { href: "/admin/approvals", label: "Price approvals", capability: "prices.approve" },
   { href: "/admin/payments", label: "Payments", capability: "payments.verify" },
   { href: "/admin/catalogue", label: "Catalogue", capability: "catalogue.view" },
