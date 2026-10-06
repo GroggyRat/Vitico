@@ -21,11 +21,12 @@ export async function getOrCreateCart(db: Tx, owner: CartOwner) {
   const existing = await db.cart.findUnique({ where });
   if (existing) return existing;
   const address = await db.address.findFirst({ where: { companyId: owner.companyId, isDefault: true } });
-  // ON CONFLICT DO NOTHING keeps concurrent first requests (e.g. two tabs) from colliding.
+  // Concurrent first requests (e.g. two tabs) insert the same deterministic id; an untargeted
+  // ON CONFLICT DO NOTHING ignores the clash whether Postgres reports it on the id or (userId, companyId).
   await db.$executeRaw`
     INSERT INTO "Cart" (id, "userId", "companyId", "addressId", "updatedAt")
     VALUES (${`cart_${owner.userId}_${owner.companyId}`.slice(0, 190)}, ${owner.userId}, ${owner.companyId}, ${address?.id ?? null}, now())
-    ON CONFLICT ("userId", "companyId") DO NOTHING`;
+    ON CONFLICT DO NOTHING`;
   return db.cart.findUniqueOrThrow({ where });
 }
 
