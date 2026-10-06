@@ -19,6 +19,7 @@ export const staffCapabilities = {
   "prices.approve": ["SUPER_ADMIN", "PRICING_MANAGER"],
   "payments.verify": ["SUPER_ADMIN", "ADMIN", "ACCOUNTS"],
   "settings.payments": ["SUPER_ADMIN", "ACCOUNTS"],
+  "settings.messages": ["SUPER_ADMIN", "ADMIN"],
 } satisfies Record<string, StaffRole[]>;
 
 export type StaffCapability = keyof typeof staffCapabilities;

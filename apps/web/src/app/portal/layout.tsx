@@ -41,7 +41,7 @@ export default async function PortalLayout({ children }: LayoutProps<"/portal">)
               )}
             </Link>
           )}
-          <UserMenu name={user.name} subtitle={`${company.name} · ${companyRoleLabels[user.companyRole!]}`} />
+          <UserMenu userId={user.id} area="portal" name={user.name} subtitle={`${company.name} · ${companyRoleLabels[user.companyRole!]}`} />
           </div>
         </div>
       </header>
