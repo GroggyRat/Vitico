@@ -10,6 +10,7 @@ import { formatCents } from "@/lib/format";
 import { toBusinessInput } from "@/lib/time";
 import { priceCart } from "@/server/orders/cart";
 import { creditAvailable, paymentMethodLabel } from "@/server/orders/orders";
+import { walletBalance } from "@/server/rebates/service";
 import { cartDetailsAction, placeOrderAction, removeAction, saveListAction, setQtyAction } from "./actions";
 import { CartLines } from "@/components/orders/cart-view";
 import { CheckoutForm, DetailsForm, QtyForm, SaveListForm } from "@/components/orders/cart-forms";
@@ -19,10 +20,11 @@ export const metadata: Metadata = { title: "Cart" };
 export default async function CartPage() {
   const { owner, company, user } = await customerCart("orders.place");
   const db = getDb();
-  const [priced, addresses, credit] = await Promise.all([
+  const [priced, addresses, credit, wallet] = await Promise.all([
     priceCart(db, owner),
     db.address.findMany({ where: { companyId: company.id }, include: { region: true }, orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     creditAvailable(db, company.id),
+    walletBalance(db, company.id),
   ]);
 
   if (priced.lines.length === 0) {
@@ -98,6 +100,7 @@ export default async function CartPage() {
               <CheckoutForm
                 action={placeOrderAction}
                 methods={methods}
+                rebateMaxCents={Math.min(wallet.availableCents, priced.totalCents)}
                 disabledReason={priced.hasProblems ? "Fix the items marked in red before ordering." : !priced.cart.pickup && !priced.cart.addressId ? "Choose a delivery address." : null}
               />
             </CardBody>

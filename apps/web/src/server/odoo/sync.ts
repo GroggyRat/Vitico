@@ -1,6 +1,7 @@
 import { type Db, type Prisma, OdooTaskKind, PaymentStatus } from "@vitico/db";
 import type { OdooTransport } from "./client";
 import { OdooError } from "./client";
+import { onOrderPaid } from "../rebates/service";
 
 type Tx = Db | Prisma.TransactionClient;
 
@@ -293,10 +294,12 @@ export async function pullAccounting(db: Db, odoo: OdooTransport, opts: { compan
     });
     if (order && m.move_type === "out_invoice") {
       const paid = m.payment_state === "paid" || m.payment_state === "in_payment";
-      await db.order.update({
-        where: { id: order.id },
-        data: { odooInvoiced: true, ...(paid && order.paymentStatus === PaymentStatus.ON_ACCOUNT && { paymentStatus: PaymentStatus.PAID }) },
+      const becomesPaid = paid && order.paymentStatus === PaymentStatus.ON_ACCOUNT;
+      await db.$transaction(async (tx) => {
+        await tx.order.update({ where: { id: order.id }, data: { odooInvoiced: true, ...(becomesPaid && { paymentStatus: PaymentStatus.PAID }) } });
+        if (becomesPaid) await onOrderPaid(tx, order.id, today);
       });
+      if (becomesPaid) order.paymentStatus = PaymentStatus.PAID;
     }
   }
 

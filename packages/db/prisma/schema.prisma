@@ -168,6 +168,9 @@ model Company {
   orders         Order[]
   odooInvoices   OdooInvoice[]
   odooPayments   OdooPayment[]
+  rebateRules    RebateRule[]
+  rebateCredits  RebateCredit[]
+  rebateUsages   RebateUsage[]
 
   @@index([status])
   @@index([salesRepId])
@@ -226,12 +229,14 @@ model Region {
 }
 
 model Tier {
-  id              String  @id @default(cuid())
-  code            String  @unique
+  id              String   @id @default(cuid())
+  code            String   @unique
   name            String
   /// Default tier-wide discount off base price; product-level tier prices override it.
-  discountPercent Decimal @default(0) @db.Decimal(5, 2)
-  sortOrder       Int     @default(0)
+  discountPercent Decimal  @default(0) @db.Decimal(5, 2)
+  /// Trailing 12-month spend (FJD excl. VAT) at which customers are suggested for this tier.
+  minAnnualSpend  Decimal? @db.Decimal(12, 2)
+  sortOrder       Int      @default(0)
 
   companies  Company[]
   tierPrices TierPrice[]
@@ -645,38 +650,47 @@ model Order {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  lines        OrderLine[]
-  events       OrderEvent[]
-  payments     Payment[]
-  odooInvoices OdooInvoice[]
+  /// Rebate wallet value applied to this order (reduces what's left to pay).
+  rebateApplied Decimal   @default(0) @db.Decimal(12, 2)
+  paidAt        DateTime?
+  completedAt   DateTime?
+
+  lines         OrderLine[]
+  events        OrderEvent[]
+  payments      Payment[]
+  odooInvoices  OdooInvoice[]
+  rebateCredits RebateCredit[]
+  rebateUsages  RebateUsage[]
 
   @@index([companyId, createdAt])
   @@index([status])
 }
 
 model OrderLine {
-  id                  String  @id @default(cuid())
+  id                  String   @id @default(cuid())
   orderId             String
-  order               Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId           String
-  product             Product @relation(fields: [productId], references: [id])
+  product             Product  @relation(fields: [productId], references: [id])
   sku                 String
   name                String
   sellUnit            String
   qty                 Int
   qtyFulfilled        Int?
   /// What the customer pays per unit (FJD excl. VAT).
-  unitPrice           Decimal @db.Decimal(12, 2)
+  unitPrice           Decimal  @db.Decimal(12, 2)
+  /// Product base price at order time, for "you saved" figures.
+  baseUnitPrice       Decimal? @db.Decimal(12, 2)
   /// What the pricing engine said; differs from unitPrice only for approved overrides.
-  calculatedUnitPrice Decimal @db.Decimal(12, 2)
+  calculatedUnitPrice Decimal  @db.Decimal(12, 2)
   priceSource         String
   priceLabel          String
   overrideReason      String?
-  vatPercent          Decimal @db.Decimal(5, 2)
-  lineNet             Decimal @db.Decimal(12, 2)
-  lineVat             Decimal @db.Decimal(12, 2)
-  cartonCbm           Decimal @db.Decimal(10, 4)
-  cartonWeightKg      Decimal @db.Decimal(10, 3)
+  vatPercent          Decimal  @db.Decimal(5, 2)
+  lineNet             Decimal  @db.Decimal(12, 2)
+  lineVat             Decimal  @db.Decimal(12, 2)
+  cartonCbm           Decimal  @db.Decimal(10, 4)
+  cartonWeightKg      Decimal  @db.Decimal(10, 3)
 
   @@index([orderId])
   @@index([productId])
@@ -885,4 +899,115 @@ model OdooPayment {
   syncedAt  DateTime @default(now())
 
   @@index([companyId, date])
+}
+
+// ─── Rebates (SPEC §10) ──────────────────────────────────────────────────────
+
+enum RebateType {
+  /// Spend ≥ threshold in a period → earn % of that period's spend (stepped).
+  SPEND_TARGET
+  /// Earn % on eligible lines when the order completes and is paid.
+  CASHBACK
+  /// Earn % when an order/invoice is paid within N days.
+  EARLY_PAYMENT
+  /// Per-customer % of spend over a contract period, settled at period end after admin review.
+  CONTRACT
+}
+
+enum RebatePeriod {
+  MONTH
+  QUARTER
+  YEAR
+}
+
+model RebateRule {
+  id               String        @id @default(cuid())
+  name             String
+  description      String?
+  type             RebateType
+  active           Boolean       @default(true)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  /// Empty = every tier.
+  tierIds          String[]      @default([])
+  /// CONTRACT rules (and optional for others): only this customer.
+  companyId        String?
+  company          Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  period           RebatePeriod?
+  /// SPEND_TARGET steps: [{ "threshold": 10000, "percent": 1 }, …], ascending.
+  steps            Json?
+  /// CASHBACK / EARLY_PAYMENT / CONTRACT rate.
+  percent          Decimal?      @db.Decimal(5, 2)
+  /// CASHBACK eligibility; empty = all products.
+  categoryIds      String[]      @default([])
+  skus             String[]      @default([])
+  /// EARLY_PAYMENT window.
+  earlyPaymentDays Int?
+  /// Earned credit expires this many days after it becomes available. Null = never.
+  expiryDays       Int?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  credits RebateCredit[]
+}
+
+enum RebateCreditStatus {
+  PENDING
+  AVAILABLE
+  EXPIRED
+  CANCELLED
+}
+
+/// A lot of rebate value earned by a customer. Spending reduces `remaining` (soonest-expiring first).
+model RebateCredit {
+  id          String             @id @default(cuid())
+  companyId   String
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ruleId      String?
+  rule        RebateRule?        @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  orderId     String?
+  order       Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  /// Spend-target / contract period, e.g. "2026-Q3". Unique per rule & customer.
+  periodKey   String?
+  description String
+  amount      Decimal            @db.Decimal(12, 2)
+  remaining   Decimal            @db.Decimal(12, 2)
+  status      RebateCreditStatus
+  earnedAt    DateTime           @default(now())
+  availableAt DateTime?
+  expiresAt   DateTime?
+  actorId     String?
+  createdAt   DateTime           @default(now())
+
+  usages RebateUsageLine[]
+
+  @@unique([ruleId, companyId, periodKey])
+  @@unique([ruleId, orderId])
+  @@index([companyId, status])
+}
+
+/// Rebate value spent (on an order or a Deal Drop bond) or removed by an admin.
+model RebateUsage {
+  id          String            @id @default(cuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orderId     String?
+  order       Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  amount      Decimal           @db.Decimal(12, 2)
+  description String
+  actorId     String?
+  createdAt   DateTime          @default(now())
+  lines       RebateUsageLine[]
+
+  @@index([companyId, createdAt])
+}
+
+model RebateUsageLine {
+  usageId  String
+  usage    RebateUsage  @relation(fields: [usageId], references: [id], onDelete: Cascade)
+  creditId String
+  credit   RebateCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  amount   Decimal      @db.Decimal(12, 2)
+
+  @@id([usageId, creditId])
 }

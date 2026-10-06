@@ -62,9 +62,11 @@ export async function placeOrderAction(_: ActionState, formData: FormData): Prom
   const { owner, placer } = await customerCart("orders.place");
   const method = paymentMethodSchema.safeParse(formData.get("paymentMethod"));
   if (!method.success) return { ok: false, message: "Choose a payment method.", errors: { paymentMethod: ["Choose a payment method."] } };
+  const rebate = Number(formData.get("rebate") || 0);
+  if (!Number.isFinite(rebate) || rebate < 0) return { ok: false, message: "Enter a valid rebate amount.", errors: { rebate: ["Enter a valid amount."] } };
   let id: string;
   try {
-    id = (await placeOrder(getDb(), owner, placer, method.data)).id;
+    id = (await placeOrder(getDb(), owner, placer, method.data, { rebateCents: Math.round(rebate * 100) })).id;
   } catch (e) {
     return serviceErrorState(e);
   }
