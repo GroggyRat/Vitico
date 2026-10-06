@@ -186,6 +186,8 @@ export const productSchema = z
       ),
     lowStockThreshold: intField(0, "low-stock threshold"),
     active: checkbox,
+    /** Missing = allowed (keeps CSV imports without the column working). */
+    containerEligible: z.preprocess((v) => (v === undefined || v === "" ? true : v === "true" || v === true || v === "yes" || v === "1"), z.boolean()),
   })
   .refine((p) => p.moq % p.orderMultiple === 0, {
     error: "Minimum order must be a multiple of the order multiple.",
@@ -227,6 +229,9 @@ const optionalDate = (opts: { endOfDay?: boolean } = {}) =>
       }
       return d;
     });
+
+/** An optional date input (Fiji time) for use in other modules' schemas. */
+export const optionalDateField = optionalDate();
 
 const adjustmentKind = z.enum(["PERCENT_OFF", "FIXED_PRICE"]);
 
@@ -421,4 +426,55 @@ export const rebateRuleSchema = z.object({
 export const walletAdjustSchema = z.object({
   amount: z.coerce.number({ error: "Enter an amount." }).refine((v) => v !== 0 && Math.abs(v) <= 1_000_000, { error: "Enter an amount other than zero." }),
   reason: trimmed().min(3, { error: "Give a reason." }).max(300),
+});
+
+const requiredDate = (label: string) =>
+  optionalDate().refine((v): v is Date => v !== null, { error: `Enter the ${label}.` });
+
+/** "SKU, qty" per line: the products in one deal unit. */
+const dealItems = z.string().transform((v, ctx) => {
+  const items = [];
+  for (const raw of v.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = /^([A-Za-z0-9._-]+)[\s,;]+(\d+)$/.exec(line);
+    if (!m || Number(m[2]) < 1) {
+      ctx.addIssue({ code: "custom", message: `Couldn't read "${line}". Use one product per line: SKU, quantity.` });
+      return z.NEVER;
+    }
+    items.push({ sku: m[1].toUpperCase(), qtyPerDeal: Number(m[2]) });
+  }
+  return items;
+});
+
+export const dealSchema = z.object({
+  name: trimmed().min(2, { error: "Name the deal." }).max(100),
+  description: optionalText(),
+  imageUrl: optionalText(),
+  dealPrice: z.coerce.number({ error: "Enter the deal price." }).positive({ error: "Enter the deal price." }).max(10_000_000),
+  totalUnits: z.coerce.number({ error: "Enter a number." }).int({ error: "Use whole units." }).min(1).max(100_000),
+  maxPerCustomer: z.coerce.number({ error: "Enter a number." }).int({ error: "Use whole units." }).min(1).max(100_000),
+  bondPercent: z.coerce.number({ error: "Enter a percentage." }).min(0).max(100, { error: "A percentage can't exceed 100." }),
+  completionDays: z.coerce.number({ error: "Enter a number of days." }).int().min(1).max(90),
+  startsAt: requiredDate("start"),
+  endsAt: requiredDate("end"),
+  tierIds: z.array(z.string()).default([]),
+  regionIds: z.array(z.string()).default([]),
+  companyIds: z.array(z.string()).default([]),
+  items: dealItems,
+});
+
+export const secureDealSchema = z.object({
+  units: z.coerce.number({ error: "Enter how many." }).int({ error: "Use whole units." }).min(1, { error: "At least 1." }),
+  method: z.enum(["REBATE_WALLET", "BANK_DEPOSIT", "MPAISA", "MYCASH"], { error: "Choose how you'll pay the bond." }),
+  reference: optionalText(),
+});
+
+export const completeDealSchema = z.object({
+  paymentMethod: paymentMethodSchema,
+  rebate: z
+    .union([z.literal(""), z.coerce.number().min(0)])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? 0 : v)),
+  poNumber: optionalText(),
 });

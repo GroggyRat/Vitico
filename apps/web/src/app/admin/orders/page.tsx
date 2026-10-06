@@ -78,6 +78,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
                   <Link href={`/admin/orders/${o.id}`} className="font-medium text-brand-700 hover:underline">
                     {o.number}
                   </Link>
+                  {o.type === "CONTAINER" && <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">Container</span>}
                   <div className="text-xs text-ink-muted">{o.pickup ? "Pickup" : o.region.name}{o.poNumber && ` · PO ${o.poNumber}`}</div>
                 </Td>
                 <Td>{o.company.name}</Td>

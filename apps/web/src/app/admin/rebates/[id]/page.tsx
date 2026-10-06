@@ -22,7 +22,7 @@ export default async function EditRulePage({ params }: PageProps<"/admin/rebates
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/rebates" className="text-ink-muted hover:text-ink">
-          ← Rebates
+          Back to Rebates
         </Link>
       </div>
       <PageHeader title={rule.name} />

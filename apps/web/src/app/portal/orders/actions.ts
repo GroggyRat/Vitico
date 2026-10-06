@@ -54,5 +54,5 @@ export async function submitPaymentAction(orderId: string, _: ActionState, formD
     return serviceErrorState(e);
   }
   refresh(orderId);
-  return { ok: true, message: "Thanks — we'll confirm your payment shortly." };
+  return { ok: true, message: "Thanks, we'll confirm your payment shortly." };
 }

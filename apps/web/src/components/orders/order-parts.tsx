@@ -42,7 +42,7 @@ export function OrderLines({ lines, showCalculated }: { lines: Line[]; showCalcu
               <Td className="text-right tabular-nums">{l.qty}</Td>
               {anyFulfilled && (
                 <Td className={l.qtyFulfilled !== null && l.qtyFulfilled < l.qty ? "text-right font-medium text-amber-700 tabular-nums" : "text-right tabular-nums"}>
-                  {l.qtyFulfilled ?? "—"}
+                  {l.qtyFulfilled ?? "-"}
                 </Td>
               )}
               <Td className="text-right tabular-nums">{formatFJD(l.unitPrice)}</Td>
@@ -61,12 +61,14 @@ export function OrderTotals({
   total,
   isExport,
   rebate = 0,
+  bond = 0,
 }: {
   subtotal: Prisma.Decimal | number;
   vat: Prisma.Decimal | number;
   total: Prisma.Decimal | number;
   isExport: boolean;
   rebate?: Prisma.Decimal | number;
+  bond?: Prisma.Decimal | number;
 }) {
   return (
     <dl className="ml-auto w-full max-w-xs space-y-1 text-sm">
@@ -82,15 +84,23 @@ export function OrderTotals({
         <dt>Total</dt>
         <dd className="tabular-nums">{formatFJD(total)}</dd>
       </div>
+      {Number(bond) > 0 && (
+        <div className="flex justify-between text-brand-700">
+          <dt>Deal bond paid</dt>
+          <dd className="tabular-nums">−{formatFJD(bond)}</dd>
+        </div>
+      )}
       {Number(rebate) > 0 && (
+        <div className="flex justify-between text-brand-700">
+          <dt>Paid with rebates</dt>
+          <dd className="tabular-nums">−{formatFJD(rebate)}</dd>
+        </div>
+      )}
+      {Number(rebate) + Number(bond) > 0 && (
         <>
-          <div className="flex justify-between text-brand-700">
-            <dt>Paid with rebates</dt>
-            <dd className="tabular-nums">−{formatFJD(rebate)}</dd>
-          </div>
           <div className="flex justify-between font-semibold">
             <dt>Amount due</dt>
-            <dd className="tabular-nums">{formatFJD(Number(total) - Number(rebate))}</dd>
+            <dd className="tabular-nums">{formatFJD(Number(total) - Number(rebate) - Number(bond))}</dd>
           </div>
         </>
       )}

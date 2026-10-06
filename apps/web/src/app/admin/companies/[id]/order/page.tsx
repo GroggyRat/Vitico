@@ -36,7 +36,7 @@ export default async function StaffOrderPage({ params }: PageProps<"/admin/compa
     <>
       <div className="mb-2 text-sm">
         <Link href={`/admin/companies/${company.id}`} className="text-ink-muted hover:text-ink">
-          ← {company.name}
+          Back to {company.name}
         </Link>
       </div>
       <PageHeader title={`New order for ${company.name}`} description="Prices are the customer's own. Manual prices go to a pricing manager for approval." />
@@ -68,7 +68,7 @@ export default async function StaffOrderPage({ params }: PageProps<"/admin/compa
               <CardBody>
                 <DetailsForm
                   action={staffDetailsAction.bind(null, company.id)}
-                  addresses={addresses.map((a) => ({ id: a.id, label: `${a.label} — ${a.city}, ${a.region.name}` }))}
+                  addresses={addresses.map((a) => ({ id: a.id, label: `${a.label}, ${a.city}, ${a.region.name}` }))}
                   values={{
                     delivery: priced.cart.pickup ? "pickup" : (priced.cart.addressId ?? addresses[0]?.id ?? "pickup"),
                     poNumber: priced.cart.poNumber ?? "",

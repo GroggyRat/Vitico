@@ -118,6 +118,7 @@ export const CSV_COLUMNS = [
   "low_stock_threshold",
   "active",
   "description",
+  "container_eligible",
 ] as const;
 
 export const MAX_IMPORT_ROWS = 5000;
@@ -188,6 +189,7 @@ export async function importProductsCsv(db: Db, actor: StaffActor, csv: string):
       tags: r.tags ?? "",
       lowStockThreshold: r.low_stock_threshold || 10,
       active: r.active === undefined || r.active.trim() === "" ? "true" : r.active.trim().toLowerCase(),
+      containerEligible: r.container_eligible?.trim().toLowerCase(),
     });
     if (!result.success) {
       const issue = result.error.issues[0];
@@ -275,6 +277,7 @@ export async function exportProductsCsv(db: Db): Promise<string> {
       p.lowStockThreshold,
       p.active ? "true" : "false",
       p.description ?? "",
+      p.containerEligible ? "true" : "false",
       p.stock?.onHand ?? 0,
       p.stock ? p.stock.onHand - p.stock.reserved - p.stock.allocated : 0,
     ]),

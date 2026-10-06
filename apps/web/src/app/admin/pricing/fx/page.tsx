@@ -45,8 +45,8 @@ export default async function FxPage() {
                   <Td>
                     <RateForm currency={c} perFjd={r?.perFjd.toString() ?? ""} />
                   </Td>
-                  <Td className="text-xs text-ink-muted">{r ? (r.source === "manual" ? "Manual" : "Rate service") : <span className="text-amber-700">Not set — not shown to customers</span>}</Td>
-                  <Td className="text-xs text-ink-muted">{r ? formatDateTime(r.updatedAt) : "—"}</Td>
+                  <Td className="text-xs text-ink-muted">{r ? (r.source === "manual" ? "Manual" : "Rate service") : <span className="text-amber-700">Not set, not shown to customers</span>}</Td>
+                  <Td className="text-xs text-ink-muted">{r ? formatDateTime(r.updatedAt) : "-"}</Td>
                 </tr>
               );
             })}

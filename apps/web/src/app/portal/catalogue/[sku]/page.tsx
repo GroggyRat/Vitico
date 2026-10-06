@@ -58,7 +58,7 @@ export default async function ProductPage({ params }: PageProps<"/portal/catalog
     <>
       <div className="mb-4 text-sm">
         <Link href={`/portal/catalogue?category=${product.category.slug}`} className="text-ink-muted hover:text-ink">
-          ← {product.category.name}
+          Back to {product.category.name}
         </Link>
       </div>
       <div className="grid gap-8 lg:grid-cols-2">
@@ -127,7 +127,7 @@ export default async function ProductPage({ params }: PageProps<"/portal/catalog
                   {fccc.savingCents > 0 && (
                     <span className="text-emerald-700">
                       {" "}
-                      — {formatCents(fccc.savingCents)} ({fccc.savingPercent}%) below
+                     , {formatCents(fccc.savingCents)} ({fccc.savingPercent}%) below
                     </span>
                   )}
                 </p>

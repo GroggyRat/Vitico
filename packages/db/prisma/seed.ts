@@ -1,16 +1,16 @@
 /**
  * Development seed: reference data (regions, tiers) plus realistic fake staff,
- * customer companies and users. Idempotent — safe to run repeatedly.
+ * customer companies and users. Idempotent, safe to run repeatedly.
  *
  * All seeded users share the password in SEED_PASSWORD (default below).
  */
 import { hash } from "@node-rs/argon2";
+import { regions, tiers, upsertReferenceData } from "./reference-data";
 import { seedCategories, seedProducts } from "./seed-catalogue";
 import {
   CompanyRole,
   CompanyStatus,
   StaffRole,
-  UpliftType,
   UserStatus,
   createDb,
 } from "../src/index";
@@ -21,42 +21,6 @@ if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW_PRODUCTION !
 
 const db = createDb();
 const PASSWORD = process.env.SEED_PASSWORD ?? "Vitico!2026";
-
-type RegionSeed = {
-  code: string;
-  name: string;
-  countryCode: string;
-  currency: string;
-  isExport?: boolean;
-  upliftType?: UpliftType;
-  upliftValue?: number;
-  parent?: string;
-};
-
-// Uplift values are placeholders until VITICO confirms them (SPEC §18).
-const regions: RegionSeed[] = [
-  { code: "FJ", name: "Fiji", countryCode: "FJ", currency: "FJD" },
-  { code: "FJ-VL", name: "Viti Levu", countryCode: "FJ", currency: "FJD", parent: "FJ" },
-  { code: "FJ-VN", name: "Vanua Levu", countryCode: "FJ", currency: "FJD", parent: "FJ", upliftType: UpliftType.PERCENT, upliftValue: 5 },
-  { code: "FJ-TV", name: "Taveuni", countryCode: "FJ", currency: "FJD", parent: "FJ", upliftType: UpliftType.PERCENT, upliftValue: 8 },
-  { code: "FJ-OI", name: "Outer islands (Lau, Lomaiviti, Yasawa)", countryCode: "FJ", currency: "FJD", parent: "FJ", upliftType: UpliftType.PERCENT, upliftValue: 12 },
-  { code: "WS", name: "Samoa", countryCode: "WS", currency: "WST", isExport: true },
-  { code: "TO", name: "Tonga", countryCode: "TO", currency: "TOP", isExport: true },
-  { code: "VU", name: "Vanuatu", countryCode: "VU", currency: "VUV", isExport: true },
-  { code: "SB", name: "Solomon Islands", countryCode: "SB", currency: "SBD", isExport: true },
-  { code: "KI", name: "Kiribati", countryCode: "KI", currency: "AUD", isExport: true },
-  { code: "TV", name: "Tuvalu", countryCode: "TV", currency: "AUD", isExport: true },
-  { code: "CK", name: "Cook Islands", countryCode: "CK", currency: "NZD", isExport: true },
-  { code: "NZ", name: "New Zealand", countryCode: "NZ", currency: "NZD", isExport: true },
-  { code: "AU", name: "Australia", countryCode: "AU", currency: "AUD", isExport: true },
-];
-
-const tiers = [
-  { code: "STANDARD", name: "Standard", discountPercent: 0, minAnnualSpend: 0 },
-  { code: "PLUS", name: "Plus", discountPercent: 3, minAnnualSpend: 50_000 },
-  { code: "VIP", name: "VIP", discountPercent: 5, minAnnualSpend: 200_000 },
-  { code: "PARTNER", name: "Partner", discountPercent: 8, minAnnualSpend: 750_000 },
-];
 
 const staff = [
   { email: "admin@vitico.test", name: "Sera Tuilagi", staffRole: StaffRole.SUPER_ADMIN },
@@ -158,28 +122,7 @@ const companies: CompanySeed[] = [
 async function main() {
   const passwordHash = await hash(PASSWORD);
 
-  // Regions (parents first).
-  for (const [i, r] of regions.entries()) {
-    const parentId = r.parent
-      ? (await db.region.findUniqueOrThrow({ where: { code: r.parent } })).id
-      : null;
-    const data = {
-      name: r.name,
-      countryCode: r.countryCode,
-      currency: r.currency,
-      isExport: r.isExport ?? false,
-      upliftType: r.upliftType ?? UpliftType.NONE,
-      upliftValue: r.upliftValue ?? 0,
-      sortOrder: i,
-      parentId,
-    };
-    await db.region.upsert({ where: { code: r.code }, update: data, create: { code: r.code, ...data } });
-  }
-
-  for (const [i, t] of tiers.entries()) {
-    const data = { name: t.name, discountPercent: t.discountPercent, minAnnualSpend: t.minAnnualSpend, sortOrder: i };
-    await db.tier.upsert({ where: { code: t.code }, update: data, create: { code: t.code, ...data } });
-  }
+  await upsertReferenceData(db);
 
   for (const s of staff) {
     await db.user.upsert({
@@ -354,6 +297,58 @@ async function main() {
         data: { companyId: bulaMart.id, description: "Welcome credit", amount: 250, remaining: 250, status: "AVAILABLE", availableAt: new Date(), expiresAt: new Date(Date.now() + 120 * 86_400_000) },
       });
     }
+  }
+
+  // Container types: usable limits (placeholders until VITICO confirms its own).
+  await db.product.updateMany({ where: { sku: "BTR-SLT-40" }, data: { containerEligible: false } });
+
+  // A live sample Deal Drop, with its stock set aside like a published deal.
+  if ((await db.dealDrop.count()) === 0) {
+    const items = [
+      { sku: "OIL-VEG-20", qtyPerDeal: 1 },
+      { sku: "RIC-LG-10X2", qtyPerDeal: 2 },
+      { sku: "TUN-OIL-48", qtyPerDeal: 1 },
+    ];
+    const totalUnits = 40;
+    const now = Date.now();
+    await db.$transaction(async (tx) => {
+      const products = await tx.product.findMany({ where: { sku: { in: items.map((i) => i.sku) } }, include: { stock: true } });
+      const deal = await tx.dealDrop.create({
+        data: {
+          name: "Pantry Starter Pack",
+          description: "Oil, rice and tuna for a busy week of trade. One pack per deal unit.",
+          state: "PUBLISHED",
+          dealPrice: 219,
+          totalUnits,
+          maxPerCustomer: 5,
+          startsAt: new Date(now - 3_600_000),
+          endsAt: new Date(now + 5 * 86_400_000),
+          publishedAt: new Date(now),
+          liveSentAt: new Date(now),
+          unitsAllocated: totalUnits,
+          createdById: admin.id,
+          items: { create: items.map((i) => ({ productId: products.find((p) => p.sku === i.sku)!.id, qtyPerDeal: i.qtyPerDeal })) },
+        },
+      });
+      for (const i of items) {
+        const p = products.find((x) => x.sku === i.sku)!;
+        const qty = i.qtyPerDeal * totalUnits;
+        const level = await tx.stockLevel.update({ where: { productId: p.id }, data: { allocated: { increment: qty } } });
+        await tx.stockMovement.create({
+          data: {
+            productId: p.id,
+            type: "ALLOCATE",
+            allocatedDelta: qty,
+            onHandAfter: level.onHand,
+            reservedAfter: level.reserved,
+            allocatedAfter: level.allocated,
+            refType: "DealDrop",
+            refId: deal.id,
+            actorId: admin.id,
+          },
+        });
+      }
+    });
   }
 
   // Sample payment details shown to customers (replace with VITICO's real details in Admin → Payment details).

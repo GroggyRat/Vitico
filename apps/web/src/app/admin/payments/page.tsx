@@ -12,6 +12,7 @@ export const metadata: Metadata = { title: "Payments to verify" };
 
 export default async function PaymentsPage() {
   await requireStaff("payments.verify");
+  const bonds = await getDb().dealReservation.count({ where: { status: "PENDING_BOND" } });
   const payments = await getDb().payment.findMany({
     where: { status: "PENDING" },
     orderBy: { createdAt: "asc" },
@@ -19,7 +20,15 @@ export default async function PaymentsPage() {
   });
   return (
     <>
-      <PageHeader title="Payments to verify" description="Check each against the bank / M-PAiSA / MyCash statement, then confirm it on the order." />
+      <PageHeader
+        title="Payments to verify"
+        description="Check each against the bank / M-PAiSA / MyCash statement, then confirm it on the order."
+        actions={
+          <Link href="/admin/deals/bonds" className="text-sm text-brand-700 hover:underline">
+            Deal bonds to verify ({bonds})
+          </Link>
+        }
+      />
       <Card>
         <Table>
           <thead>

@@ -51,7 +51,7 @@ describe("partners", () => {
     expect((await db.company.findUniqueOrThrow({ where: { id: company.id } })).odooPartnerId).toBe(id);
 
     await db.company.update({ where: { id: company.id }, data: { name: "Bula Mart (Nadi)", odooPartnerId: null } });
-    expect(await pushPartner(db, odoo, company.id)).toBe(id); // found again by ref — no duplicate
+    expect(await pushPartner(db, odoo, company.id)).toBe(id); // found again by ref, no duplicate
     expect(odoo.tables["res.partner"]).toHaveLength(1);
     expect(odoo.tables["res.partner"][0].name).toBe("Bula Mart (Nadi)");
   });

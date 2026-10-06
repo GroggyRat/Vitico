@@ -1,7 +1,7 @@
 /**
  * Minimal Odoo external-API client.
  *
- * - "json2": Odoo 19+ JSON-2 API — POST {url}/json/2/{model}/{method}, bearer API key.
+ * - "json2": Odoo 19+ JSON-2 API, POST {url}/json/2/{model}/{method}, bearer API key.
  * - "jsonrpc": legacy /jsonrpc execute_kw (Odoo ≤ 18, deprecated in 19).
  *
  * Every call goes through `call(model, method, { ids?, ...namedArgs })` so the sync code
@@ -89,7 +89,7 @@ export class JsonRpcTransport implements OdooTransport {
   async call<T>(model: string, method: string, params: OdooParams = {}): Promise<T> {
     if (this.uid === null) {
       const uid = await this.rpc<number | false>("common", "authenticate", [this.cfg.db, this.cfg.username ?? "", this.cfg.apiKey, {}]);
-      if (!uid) throw new OdooError("Odoo login failed — check ODOO_USERNAME / ODOO_API_KEY.", 401, true);
+      if (!uid) throw new OdooError("Odoo login failed. Check ODOO_USERNAME / ODOO_API_KEY.", 401, true);
       this.uid = uid;
     }
     const { ids, ...kwargs } = params;

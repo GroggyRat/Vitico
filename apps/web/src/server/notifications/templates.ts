@@ -1,3 +1,5 @@
+import { APP_URL } from "@/lib/env";
+
 /**
  * Built-in message templates. Admins can override subject/body per type
  * (MessageTemplate table). Placeholders: {{name}}, {{company}}, {{order}}, etc.
@@ -19,7 +21,7 @@ export type TemplateDef = {
   mandatoryEmail?: boolean;
   subject: string;
   body: string;
-  /** Variables the template can use — shown in the admin editor. */
+  /** Variables the template can use, shown in the admin editor. */
   vars: string[];
 };
 
@@ -60,7 +62,7 @@ export const TEMPLATES = {
   "order.placed": {
     category: "orders",
     subject: "Order {{order}} received",
-    body: "Thanks — we've received order {{order}} ({{total}}). We'll let you know when it's confirmed.",
+    body: "Thanks, we've received order {{order}} ({{total}}). We'll let you know when it's confirmed.",
     vars: ["order", "total"],
   },
   "order.needs_approval": {
@@ -129,6 +131,54 @@ export const TEMPLATES = {
     body: "{{company}}'s contract rebate for {{period}} is {{amount}}. Approve it to add it to their wallet.",
     vars: ["company", "amount", "period"],
   },
+  "deal.live": {
+    category: "deals",
+    subject: "New Deal Drop: {{deal}}",
+    body: "{{deal}} is live until {{ends}}. {{units}} deal units at {{price}} each, while they last. Secure yours with a {{bond}}% bond.",
+    vars: ["deal", "ends", "units", "price", "bond"],
+  },
+  "deal.ending_soon": {
+    category: "deals",
+    subject: "{{deal}} ends soon",
+    body: "{{deal}} closes at {{ends}} and {{remaining}} deal units are left.",
+    vars: ["deal", "ends", "remaining"],
+  },
+  "deal.secured": {
+    category: "deals",
+    subject: "{{units}} x {{deal}} secured",
+    body: "Your bond of {{bond}} is confirmed and {{units}} deal units are held for you. Complete the purchase by {{completeBy}} or the bond is kept.",
+    vars: ["deal", "units", "bond", "completeBy"],
+  },
+  "deal.bond_rejected": {
+    category: "deals",
+    subject: "Bond for {{deal}} not confirmed",
+    body: "We couldn't confirm your bond payment for {{deal}}: {{reason}}. The units have been released.",
+    vars: ["deal", "reason"],
+  },
+  "deal.complete_reminder": {
+    category: "deals",
+    subject: "Complete your {{deal}} purchase by {{completeBy}}",
+    body: "You have {{units}} deal units of {{deal}} held. Complete the purchase by {{completeBy}} to keep your bond of {{bond}}.",
+    vars: ["deal", "units", "bond", "completeBy"],
+  },
+  "deal.forfeited": {
+    category: "deals",
+    subject: "{{deal}} reservation ended",
+    body: "The purchase of {{units}} deal units of {{deal}} wasn't completed in time, so the reservation has ended and the bond of {{bond}} is kept.",
+    vars: ["deal", "units", "bond"],
+  },
+  "deal.cancelled": {
+    category: "deals",
+    subject: "{{deal}} has been cancelled",
+    body: "VITICO has cancelled {{deal}}. Any bond you paid ({{bond}}) has been added to your rebate wallet.",
+    vars: ["deal", "bond"],
+  },
+  "staff.bond_to_verify": {
+    category: "staff",
+    subject: "Deal bond to verify: {{company}}",
+    body: "{{company}} paid a {{amount}} bond for {{deal}} by {{method}}, reference {{reference}}. Verify it to secure their units.",
+    vars: ["company", "deal", "amount", "method", "reference"],
+  },
 } satisfies Record<string, TemplateDef>;
 
 export type TemplateType = keyof typeof TEMPLATES;
@@ -142,19 +192,19 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", 
 /** Minimal, client-safe HTML email around a plain-text body. */
 export function emailHtml(subject: string, body: string, link?: string | null): string {
   const paragraphs = escapeHtml(body)
-    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#0f766a">$1</a>')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#132263">$1</a>')
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 16px">${p.replace(/\n/g, "<br>")}</p>`)
     .join("");
   const button = link
-    ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#0f766a;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600">Open in VITICO Wholesale</a></p>`
+    ? `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="background:#132263;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600">Open in VITICO Wholesale</a></p>`
     : "";
   return `<!doctype html><html><body style="margin:0;background:#f5f6f7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#16191d">
 <div style="max-width:560px;margin:0 auto;padding:24px">
-<div style="font-weight:700;font-size:18px;color:#0d5f56;margin-bottom:16px">VITICO <span style="font-weight:400;color:#5d6670">Wholesale</span></div>
+<div style="margin-bottom:16px"><img src="${APP_URL}/brand/wordmark.png" alt="VITICO" width="112" height="36" style="display:block;border:0"></div>
 <div style="background:#fff;border:1px solid #e2e5e9;border-radius:8px;padding:24px">
 <h1 style="font-size:18px;margin:0 0 16px">${escapeHtml(subject)}</h1>${paragraphs}${button}
 </div>
-<p style="font-size:12px;color:#5d6670;margin-top:16px">You can change which emails you get under Profile → Notifications.</p>
+<p style="font-size:12px;color:#5d6670;margin-top:16px">You can change which emails you get under Profile, Notifications.</p>
 </div></body></html>`;
 }

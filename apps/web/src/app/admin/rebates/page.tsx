@@ -104,13 +104,13 @@ export default async function RebatesAdminPage({ searchParams }: PageProps<"/adm
                 <Td className="text-xs">
                   {r.type === "SPEND_TARGET"
                     ? parseSteps(r.steps)
-                        .map((s) => `${formatFJD(s.threshold)}+ → ${s.percent}%`)
+                        .map((s) => `${formatFJD(s.threshold)}+: ${s.percent}%`)
                         .join(" · ")
                     : `${Number(r.percent)}%${r.type === "EARLY_PAYMENT" ? ` within ${r.earlyPaymentDays} days` : ""}`}
                   {r.period && <div className="text-ink-muted">per {r.period.toLowerCase()}</div>}
                 </Td>
                 <Td className="text-xs text-ink-muted">
-                  {r.startsAt ? formatDate(r.startsAt) : "Now"} → {r.endsAt ? formatDate(r.endsAt) : "ongoing"}
+                  {r.startsAt ? formatDate(r.startsAt) : "Now"} to {r.endsAt ? formatDate(r.endsAt) : "ongoing"}
                 </Td>
                 <Td className="text-right tabular-nums">{r._count.credits}</Td>
                 <Td>

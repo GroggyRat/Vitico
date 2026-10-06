@@ -77,6 +77,8 @@ model User {
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   pushSubscriptions       PushSubscription[]
+  containerBuilds         ContainerBuild[]
+  dealReservations        DealReservation[]
 
   @@index([companyId])
 }
@@ -160,36 +162,39 @@ model Company {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  users          User[]          @relation("CompanyUsers")
-  addresses      Address[]
-  contractPrices ContractPrice[]
-  carts          Cart[]
-  savedLists     SavedList[]
-  orders         Order[]
-  odooInvoices   OdooInvoice[]
-  odooPayments   OdooPayment[]
-  rebateRules    RebateRule[]
-  rebateCredits  RebateCredit[]
-  rebateUsages   RebateUsage[]
+  users            User[]            @relation("CompanyUsers")
+  addresses        Address[]
+  contractPrices   ContractPrice[]
+  carts            Cart[]
+  savedLists       SavedList[]
+  orders           Order[]
+  odooInvoices     OdooInvoice[]
+  odooPayments     OdooPayment[]
+  rebateRules      RebateRule[]
+  rebateCredits    RebateCredit[]
+  rebateUsages     RebateUsage[]
+  containerBuilds  ContainerBuild[]
+  dealReservations DealReservation[]
 
   @@index([status])
   @@index([salesRepId])
 }
 
 model Address {
-  id        String   @id @default(cuid())
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  label     String
-  line1     String
-  line2     String?
-  city      String
-  regionId  String
-  region    Region   @relation(fields: [regionId], references: [id])
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  carts     Cart[]
+  id              String           @id @default(cuid())
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  label           String
+  line1           String
+  line2           String?
+  city            String
+  regionId        String
+  region          Region           @relation(fields: [regionId], references: [id])
+  isDefault       Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  carts           Cart[]
+  containerBuilds ContainerBuild[]
 
   @@index([companyId])
 }
@@ -221,11 +226,12 @@ model Region {
   active      Boolean    @default(true)
   sortOrder   Int        @default(0)
 
-  companies      Company[]
-  addresses      Address[]
-  contractPrices ContractPrice[]
-  fcccPrices     FcccPrice[]
-  orders         Order[]
+  companies       Company[]
+  addresses       Address[]
+  contractPrices  ContractPrice[]
+  fcccPrices      FcccPrice[]
+  orders          Order[]
+  containerBuilds ContainerBuild[]
 }
 
 model Tier {
@@ -308,6 +314,8 @@ model Product {
   imageUrl          String?
   tags              String[]    @default([])
   active            Boolean     @default(true)
+  /// Can be shipped in a dry container (false for chilled/frozen or hazardous lines).
+  containerEligible Boolean     @default(true)
   /// Available below this many sell units shows as "low stock".
   lowStockThreshold Int         @default(10)
   createdAt         DateTime    @default(now())
@@ -323,6 +331,8 @@ model Product {
   cartItems      CartItem[]
   savedListItems SavedListItem[]
   orderLines     OrderLine[]
+  containerLines ContainerBuildLine[]
+  dealItems      DealDropItem[]
 
   @@index([categoryId])
   @@index([active])
@@ -649,6 +659,17 @@ model Order {
   submittedAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  /// Container orders: the box used and the composition totals at submission.
+  containerTypeId   String?
+  containerType     ContainerType?  @relation(fields: [containerTypeId], references: [id])
+  containerCbm      Decimal?        @db.Decimal(10, 3)
+  containerWeightKg Decimal?        @db.Decimal(12, 1)
+  containerBuild    ContainerBuild? @relation("ContainerBuildOrder")
+
+  /// Deal Drop bond already paid, deducted from what's left to pay.
+  bondApplied     Decimal          @default(0) @db.Decimal(12, 2)
+  dealReservation DealReservation?
 
   /// Rebate wallet value applied to this order (reduces what's left to pay).
   rebateApplied Decimal   @default(0) @db.Decimal(12, 2)
@@ -1010,4 +1031,169 @@ model RebateUsageLine {
   amount   Decimal      @db.Decimal(12, 2)
 
   @@id([usageId, creditId])
+}
+
+// ─── Containers (SPEC §11) ───────────────────────────────────────────────────
+
+model ContainerType {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  /// Usable volume and payload (not the box's theoretical maximum).
+  maxCbm           Decimal  @db.Decimal(8, 2)
+  maxWeightKg      Decimal  @db.Decimal(10, 1)
+  active           Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  /// Destinations this container can go to. Empty = anywhere.
+  allowedRegionIds String[] @default([])
+
+  builds ContainerBuild[]
+  orders Order[]
+}
+
+enum ContainerBuildStatus {
+  DRAFT
+  SUBMITTED
+}
+
+/// A container being filled by a customer (or a rep for them). Submitting turns it into an order.
+model ContainerBuild {
+  id                  String               @id @default(cuid())
+  companyId           String
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById         String
+  createdBy           User                 @relation(fields: [createdById], references: [id])
+  name                String
+  containerTypeId     String
+  containerType       ContainerType        @relation(fields: [containerTypeId], references: [id])
+  destinationRegionId String
+  destinationRegion   Region               @relation(fields: [destinationRegionId], references: [id])
+  /// Customer address at the destination (optional; otherwise "to port").
+  addressId           String?
+  address             Address?             @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  poNumber            String?
+  notes               String?
+  requestedDate       DateTime?
+  status              ContainerBuildStatus @default(DRAFT)
+  orderId             String?              @unique
+  order               Order?               @relation("ContainerBuildOrder", fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  lines               ContainerBuildLine[]
+
+  @@index([companyId, status])
+}
+
+model ContainerBuildLine {
+  buildId        String
+  build          ContainerBuild @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty            Int
+  overridePrice  Decimal?       @db.Decimal(12, 2)
+  overrideReason String?
+  createdAt      DateTime       @default(now())
+
+  @@id([buildId, productId])
+}
+
+// ─── Deal Drops (SPEC §12) ───────────────────────────────────────────────────
+
+enum DealState {
+  DRAFT
+  /// Stock allocated; live between startsAt and endsAt.
+  PUBLISHED
+  /// Ended and unsold stock released.
+  CLOSED
+  CANCELLED
+}
+
+model DealDrop {
+  id               String    @id @default(cuid())
+  name             String
+  description      String?
+  imageUrl         String?
+  state            DealState @default(DRAFT)
+  /// Price of one deal unit (one of each item × its qty), FJD excl. VAT.
+  dealPrice        Decimal   @db.Decimal(12, 2)
+  /// Deal units available in total and per customer.
+  totalUnits       Int
+  maxPerCustomer   Int
+  bondPercent      Decimal   @default(10) @db.Decimal(5, 2)
+  /// Days a customer has after securing to complete the purchase.
+  completionDays   Int       @default(7)
+  startsAt         DateTime
+  endsAt           DateTime
+  /// Empty = everyone.
+  tierIds          String[]  @default([])
+  regionIds        String[]  @default([])
+  companyIds       String[]  @default([])
+  publishedAt      DateTime?
+  closedAt         DateTime?
+  /// Deal units whose stock is currently allocated to this deal.
+  unitsAllocated   Int       @default(0)
+  /// Notification bookkeeping.
+  liveSentAt       DateTime?
+  /// Notification bookkeeping.
+  endingSoonSentAt DateTime?
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  items        DealDropItem[]
+  reservations DealReservation[]
+
+  @@index([state, startsAt, endsAt])
+}
+
+model DealDropItem {
+  dealId     String
+  deal       DealDrop @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  /// Sell units of this product in one deal unit.
+  qtyPerDeal Int
+
+  @@id([dealId, productId])
+}
+
+enum ReservationStatus {
+  /// Bond paid by bank/M-PAiSA/MyCash and waiting to be verified.
+  PENDING_BOND
+  SECURED
+  COMPLETED
+  /// Customer didn't complete in time (or backed out): bond kept.
+  FORFEITED
+  /// Never secured (bond rejected) or deal cancelled by VITICO: bond refunded if paid.
+  RELEASED
+}
+
+model DealReservation {
+  id               String            @id @default(cuid())
+  dealId           String
+  deal             DealDrop          @relation(fields: [dealId], references: [id])
+  companyId        String
+  company          Company           @relation(fields: [companyId], references: [id])
+  userId           String
+  user             User              @relation(fields: [userId], references: [id])
+  units            Int
+  /// Deal value at securing (incl. VAT) and the bond on it.
+  valueTotal       Decimal           @db.Decimal(12, 2)
+  bondAmount       Decimal           @db.Decimal(12, 2)
+  bondMethod       PaymentMethod
+  bondReference    String?
+  bondProofKey     String?
+  bondPaidAt       DateTime?
+  bondVerifiedById String?
+  status           ReservationStatus
+  completeBy       DateTime?
+  reminderSentAt   DateTime?
+  orderId          String?           @unique
+  order            Order?            @relation(fields: [orderId], references: [id])
+  note             String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([dealId, status])
+  @@index([companyId, status])
 }

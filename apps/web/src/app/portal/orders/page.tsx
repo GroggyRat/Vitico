@@ -22,7 +22,15 @@ export default async function OrdersPage() {
   const waiting = orders.filter((o) => o.status === "PENDING_CUSTOMER_APPROVAL");
   return (
     <>
-      <PageHeader title="Orders" description={waiting.length ? `${waiting.length} order(s) waiting for your approval` : undefined} />
+      <PageHeader
+        title="Orders"
+        description={waiting.length ? `${waiting.length} order(s) waiting for your approval` : undefined}
+        actions={
+          <a href="/portal/orders/export" download className="text-sm text-brand-700 hover:underline">
+            Download CSV
+          </a>
+        }
+      />
       <Card>
         <Table>
           <thead>
@@ -47,6 +55,7 @@ export default async function OrdersPage() {
                   <Link href={`/portal/orders/${o.id}`} className="font-medium text-brand-700 hover:underline">
                     {o.number}
                   </Link>
+                  {o.type === "CONTAINER" && <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">Container</span>}
                   <div className="text-xs text-ink-muted">
                     {o._count.lines} item(s){o.poNumber && ` · PO ${o.poNumber}`}
                   </div>

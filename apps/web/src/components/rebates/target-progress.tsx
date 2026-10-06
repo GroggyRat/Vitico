@@ -24,7 +24,7 @@ export function TargetProgress({ items }: { items: Awaited<ReturnType<typeof spe
             <p className="mt-1.5 text-xs text-ink-muted">
               {t.next
                 ? `Spend ${formatCents(t.remainingCents)} more this period to earn ${t.next.percent}% back${t.reached ? ` (currently ${t.reached.percent}% = ${formatCents(t.earnedCents)})` : ""}.`
-                : `Top step reached — you'll earn ${t.reached!.percent}% (${formatCents(t.earnedCents)}) at period end.`}
+                : `Top step reached: you'll earn ${t.reached!.percent}% (${formatCents(t.earnedCents)}) at period end.`}
             </p>
           </div>
         );

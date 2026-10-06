@@ -105,14 +105,14 @@ export function RuleForm({ id, values, tiers, companies, categories }: { id: str
 
       {type === "SPEND_TARGET" && (
         <fieldset>
-          <legend className="mb-2 text-sm font-medium">Steps (spend in the period, FJD excl. VAT → % back on all of it)</legend>
+          <legend className="mb-2 text-sm font-medium">Steps (spend in the period, FJD excl. VAT, and the % back on all of it)</legend>
           {e.steps && <p className="mb-2 text-sm text-red-600">{e.steps[0]}</p>}
           <div className="space-y-2">
             {steps.map((s, i) => (
               <div key={i} className="flex items-center gap-2 text-sm">
                 <span className="w-16 text-ink-muted">Step {i + 1}</span>
                 <Input name="stepThreshold" type="number" min="0" step="1" defaultValue={s.threshold || ""} placeholder="e.g. 10000" aria-label={`Step ${i + 1} spend`} className="w-36" />
-                <span>→</span>
+                <span>gives</span>
                 <Input name="stepPercent" type="number" min="0" max="100" step="0.01" defaultValue={s.percent || ""} placeholder="%" aria-label={`Step ${i + 1} percent`} className="w-24" />
                 <span className="text-ink-muted">%</span>
               </div>

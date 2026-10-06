@@ -15,7 +15,7 @@ export default async function NewProductPage() {
     <>
       <div className="mb-2 text-sm">
         <Link href="/admin/catalogue" className="text-ink-muted hover:text-ink">
-          ← Catalogue
+          Back to Catalogue
         </Link>
       </div>
       <PageHeader title="New product" />

@@ -8,7 +8,7 @@ export default function SubmittedPage() {
   return (
     <Card>
       <CardBody className="space-y-3 p-6 sm:p-8">
-        <h1 className="text-xl font-semibold">Thanks — application received</h1>
+        <h1 className="text-xl font-semibold">Application received</h1>
         <p className="text-sm text-ink-muted">
           Our team will review your details, usually within one business day. You&apos;ll be able to sign in with the email
           and password you just chose once your account is approved.
