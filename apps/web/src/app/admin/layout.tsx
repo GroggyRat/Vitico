@@ -37,7 +37,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   const subtitle = staffRoleLabels[user.staffRole!];
   return (
     <div className="flex flex-1 flex-col md:flex-row">
-      <aside className="relative border-b border-line bg-surface md:w-60 md:shrink-0 md:border-r md:border-b-0">
+      <aside className="relative z-40 border-b border-line bg-surface md:w-60 md:shrink-0 md:border-r md:border-b-0">
         <div className="flex items-center justify-between gap-3 px-4 py-2 md:px-5 md:py-4">
           <Link href="/admin" className="flex items-end gap-2">
             <Wordmark height={26} />

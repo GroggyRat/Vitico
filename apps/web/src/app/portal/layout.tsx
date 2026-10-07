@@ -28,7 +28,7 @@ export default async function PortalLayout({ children }: LayoutProps<"/portal">)
   const subtitle = `${company.name} · ${companyRoleLabels[user.companyRole!]}`;
   return (
     <div className="flex flex-1 flex-col">
-      <header className="relative border-b border-line bg-surface">
+      <header className="relative z-40 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-2 sm:pb-0 sm:pt-3">
           <Link href="/portal" className="flex items-end gap-2">
             <Wordmark height={28} />
