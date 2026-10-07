@@ -27,3 +27,20 @@ test("admin pages fit a phone screen", async ({ page }) => {
     await expectNoSideScroll(page, path);
   }
 });
+
+test("the menu button opens every page on a phone", async ({ page }) => {
+  await login(page, "owner@bulamart.test");
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("navigation", { name: "Menu" }).getByRole("link", { name: "Orders" }).click();
+  await expect(page).toHaveURL(/\/portal\/orders$/);
+  await expect(page.getByRole("navigation", { name: "Menu" })).toBeHidden();
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+
+  await login(page, "admin@vitico.test");
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("navigation", { name: "Menu" }).getByRole("link", { name: "Deal Drops" }).click();
+  await expect(page.getByRole("heading", { name: "Deal Drops" })).toBeVisible();
+});
